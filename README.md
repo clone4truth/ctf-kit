@@ -1,50 +1,62 @@
-# CTF KIT — Competitive Toolkit
+# CTF KIT — AI-Powered Security & CTF Engine (HexStrike Architecture)
 
-Modular CTF toolkit covering every category: **Encoding, Crypto, Stego,
-Forensics, Web, Reverse Engineering, Pwn, OSINT**. One tool definition feeds
-two surfaces: an **MCP server** (for LLM agents / opencode) and a **Web UI**
-(dashboard with animations, loading states, and a live streaming log console).
+Modular cybersecurity toolkit covering 90 specialized tools across **Encoding,
+Crypto, Stego, Forensics, Web, Reverse Engineering, Pwn, OSINT**. Designed
+specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot)
+via **Model Context Protocol (MCP)**, alongside a Cyberpunk **Terminal UI (TUI)**,
+interactive **CLI**, and Headless **REST API (OpenAPI / Swagger)**.
 
-## Workflow (every agent must follow)
+## Surfaces & Interfaces
 
-1. **PLAN FIRST**: `detect_challenge` (MCP tool) / `python scripts/plan.py "<problem>"`
-   — auto-detects category + platform, suggests tools, recalls memory.
-2. **RECALL**: `python scripts/recall.py "<keywords>"` — prior memory + skills.
-3. **SOLVE** with ctf-tools MCP tools.
-4. **EXTRACT FLAG — any format** (`extract_flags` tool): `flag{...}`,
-   `picoCTF{...}`, `HTB{...}`, `COMPFEST{...}`, `flag: xxx`, `FLAG-xxx`,
-   hex digests, any `word{...}` — nothing assumed, nothing excluded.
-5. **MEMORY + SKILL auto-save** (opencode plugin) / manual
-   `python scripts/remember.py` (other providers).
-6. **WRITEUP/POC auto-generated** at `writeups/<category>/` — step-by-step,
-   best/fastest technique, terminal + BurpSuite commands per category; augment
-   it with the exact commands you used.
-7. **NEW TOOL auto-register** when a technique repeats:
-   `python scripts/new_tool.py --name ... --category ... --params ...`
+1. **Cyberpunk Terminal UI (`tui.py`)**: Interactive terminal console with Rich tables, category browser, live parameter prompts, and instant challenge file triage.
+2. **Headless MCP Server (`mcp_server.py`)**: High-performance stdio server exposing 90 tools to AI Agents with full JSON-RPC schemas.
+3. **Command Line Interface (`cli.py`)**: Direct tool runner and UNIX pipeable CLI.
+4. **Headless REST API (`api_server.py`)**: FastAPI microservice with Swagger documentation at `http://127.0.0.1:8765/docs`.
 
 ## Quickstart
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install rich
 
-# Web UI  -> http://localhost:8765
-.venv\Scripts\python webui.py
+# 1. Cyberpunk Terminal Dashboard (TUI)
+.venv\Scripts\python tui.py
 
-# MCP server (stdio) — for opencode / Claude / other agents
+# 2. CLI tool runner
+.venv\Scripts\python cli.py list
+.venv\Scripts\python cli.py run caesar --text "Spwwz Hzpwwoi" --shift -1
+.venv\Scripts\python cli.py triage challenge.png
+
+# 3. Headless MCP Server (for AI Agents)
 .venv\Scripts\python mcp_server.py
+
+# 4. Headless REST API (with Swagger UI)
+.venv\Scripts\python api_server.py  # -> http://localhost:8765/docs
 
 # Tests
 .venv\Scripts\python gen_testdata.py
-.venv\Scripts\python test_smoke.py   # 54 tests covering all tools
-.venv\Scripts\python test_mcp.py     # MCP handshake
+.venv\Scripts\python test_smoke.py   # 85 tests covering all tools
+.venv\Scripts\python test_mcp.py     # MCP handshake verification
 ```
 
-## Use in opencode
+## Use with MCP Clients (Claude / Cursor / VS Code / OpenCode)
 
-`opencode.json` registers `ctf-tools` as an MCP server (90 tools). Restart
-opencode after changing the config, and launch opencode from this folder so
-the project config is picked up.
+Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client config.
+
+```json
+{
+  "mcpServers": {
+    "ctf-tools": {
+      "command": ".venv/Scripts/python",
+      "args": ["mcp_server.py"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
 
 ## Tools by category
 
@@ -65,21 +77,19 @@ the project config is picked up.
 ```
 ctf-tools/
 ├── ctfkit/
-│   ├── logging.py        # LogBus — streams logs to the UI via SSE
-│   ├── registry.py       # @tool() decorator + run_tool + list_tools
+│   ├── logging.py        # LogBus — streams logs
+│   ├── registry.py       # @tool() decorator + run_tool + list_tools + auto type coercion
 │   ├── utils.py          # helpers: hex, english scoring, magic bytes, param introspection
 │   └── modules/          # one file per category (encoding, crypto_classic,
-│                         #   crypto_modern, stego, forensics, web, rev_pwn, osint)
-├── web/
-│   ├── app.py            # FastAPI: /api/tools, /api/run, /api/logs (SSE), /
-│   └── static/           # index.html, style.css, app.js (dark cyber theme)
-├── memory/               # per-challenge memory + _index.md (auto, plugin)
-├── writeups/<category>/  # step-by-step POCs with terminal/BurpSuite commands (auto)
-├── mcp_server.py         # MCP stdio entrypoint (mcp 2.0 MCPServer)
-├── webui.py              # Web UI entrypoint
-├── wordlists/common.txt  # small wordlist for hash_crack_common
-├── test_smoke.py         # smoke tests for every tool
-└── test_mcp.py           # MCP handshake test
+│                         #   crypto_modern, stego, forensics, web, rev_pwn, osint, analyze)
+├── tui.py                # Cyberpunk Terminal User Interface (Rich-powered TUI)
+├── cli.py                # Command Line Tool Runner & Pipeable CLI
+├── mcp_server.py         # Headless MCP stdio server (mcp 2.0 MCPServer)
+├── api_server.py         # Headless FastAPI REST Server (OpenAPI /docs)
+├── memory/               # per-challenge memory + _index.md
+├── writeups/<category>/  # step-by-step POCs with terminal commands
+├── test_smoke.py         # 85 smoke tests covering every tool
+└── test_mcp.py           # MCP handshake & protocol test
 ```
 
 ## Log console

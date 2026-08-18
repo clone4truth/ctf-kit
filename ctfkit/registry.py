@@ -52,6 +52,22 @@ def run_tool(name: str, args: dict) -> str:
     meta = TOOLS[name]
     fn = meta["fn"]
     sig_args = {k: v for k, v in args.items() if k in {p["name"] for p in meta["params"]}}
+    param_types = {p["name"]: p.get("type") for p in meta["params"]}
+    for k, v in list(sig_args.items()):
+        expected_type = param_types.get(k)
+        if expected_type in ("int", "integer") and isinstance(v, str):
+            try:
+                sig_args[k] = int(v)
+            except (ValueError, TypeError):
+                pass
+        elif expected_type in ("float", "number") and isinstance(v, str):
+            try:
+                sig_args[k] = float(v)
+            except (ValueError, TypeError):
+                pass
+        elif expected_type in ("bool", "boolean") and isinstance(v, str):
+            sig_args[k] = v.lower() in ("1", "true", "yes", "y")
+
     if "path" in sig_args and isinstance(sig_args["path"], str):
         sig_args["path"] = sig_args["path"].replace("\\", "/")
     import time as _time

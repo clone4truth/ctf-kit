@@ -19,6 +19,10 @@ def build_server() -> MCPServer:
     return server
 
 
-if __name__ == "__main__":
+def main():
     build_server()
     server.run()  # transport default: stdio
+
+
+if __name__ == "__main__":
+    main()
