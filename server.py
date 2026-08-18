@@ -35,7 +35,7 @@ from rich.progress import (
     TimeElapsedColumn
 )
 
-import ctfkit.modules  # noqa: F401
+from ctfkit import __version__
 from ctfkit.registry import TOOLS, run_tool, list_tools, CATEGORIES
 from ctfkit.logging import log
 
@@ -60,13 +60,13 @@ CAT_ICONS = {
     "rev": "⚙️",
     "pwn": "💥",
     "osint": "🛰️",
-    "misc": "🧩"
+    "misc": "🎯"
 }
 
 app = FastAPI(
     title="CTF Kit — AI Security & CTF Engine",
     description="Headless Security & CTF Engine exposing 90 tools for AI Agents and REST clients.",
-    version="2.5.0",
+    version=__version__,
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -88,7 +88,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "ready": True,
-        "version": "2.5.0",
+        "version": __version__,
         "server_engine": "CTF Kit",
         "tools_registered": len(TOOLS),
         "categories_count": len(categories),

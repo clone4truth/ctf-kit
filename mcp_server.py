@@ -15,13 +15,14 @@ from rich.panel import Panel
 from rich.table import Table
 
 import ctfkit.modules  # noqa: F401
+from ctfkit import __version__
 from ctfkit.registry import TOOLS
 from ctfkit.logging import log
 
 console = Console(stderr=True)
 server = MCPServer(
     "ctf-tools",
-    version="2.5.0",
+    version=__version__,
     description="Comprehensive AI-powered CTF & Security Toolkit: 90 tools covering crypto, stego, forensics, web, rev, pwn, osint, encoding."
 )
 
