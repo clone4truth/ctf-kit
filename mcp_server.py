@@ -40,7 +40,7 @@ def print_interactive_notice():
     table.add_row("[bold cyan]Active Tools:[/bold cyan]", f"[bold magenta]{len(TOOLS)} Tools Across 9 Modules[/bold magenta]")
     table.add_row("[bold cyan]AI Clients:[/bold cyan]", "[bold white]Claude Desktop, Cursor, Cline, OpenCode, Copilot[/bold white]")
     table.add_row("[bold cyan]REST Server:[/bold cyan]", "[bold yellow]python server.py (OpenAPI at /docs)[/bold yellow]")
-    table.add_row("[bold cyan]Test Protocol:[/bold cyan]", "[bold cyan]python test_mcp.py[/bold cyan]")
+    table.add_row("[bold cyan]Test Protocol:[/bold cyan]", "[bold cyan]python tests/test_mcp.py[/bold cyan]")
     
     console.print(Panel(table, title="[bold green]⚡ CTF KIT — MCP SERVER (STDIO MODE)[/bold green]", border_style="cyan"))
     console.print("[dim]This process is designed to be launched automatically by MCP clients. Press Ctrl+C to exit.[/dim]\n")

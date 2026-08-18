@@ -1,7 +1,12 @@
-"""Test MCP stdio handshake + tool list. Jalankan: python test_mcp.py"""
+"""Test MCP stdio handshake + tool list. Jalankan: python tests/test_mcp.py"""
 import asyncio
 import json
+import os
 import sys
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -19,10 +24,12 @@ REQS = [
 
 
 async def main():
+    mcp_script = os.path.join(REPO_ROOT, "mcp_server.py")
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "mcp_server.py",
+        sys.executable, mcp_script,
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL)
+        stderr=asyncio.subprocess.DEVNULL,
+        cwd=REPO_ROOT)
     lines = []
 
     async def collect():
@@ -62,4 +69,5 @@ async def main():
     print(f"MCP HANDSHAKE OK — All {len(tools)} tools exposed properly")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

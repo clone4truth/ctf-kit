@@ -37,7 +37,7 @@ osint, misc) exposed as a Headless MCP server and REST API.
    challenges, scaffold it and it auto-registers (MCP + API, no config change):
    `python scripts/new_tool.py --name <snake_case> --category <cat> --summary "..." --params "a:str,b:int"`
    Then implement the function body in the generated `ctfkit/modules/<name>.py`.
-8. **Verify.** After adding tools: `python test_smoke.py` (expect all OK).
+8. **Verify.** After adding tools: `python tests/test_smoke.py` (expect all OK).
 
 ## Memory & skills
 
@@ -50,9 +50,9 @@ osint, misc) exposed as a Headless MCP server and REST API.
 
 ## Testing & validation
 
-- `python gen_testdata.py` regenerates `testdata/` demo files.
-- `python test_smoke.py` — 85 smoke tests over all tools.
-- `python test_mcp.py` — MCP handshake check.
+- `python tests/gen_testdata.py` regenerates `testdata/` demo files.
+- `python tests/test_smoke.py` — 85 smoke tests over all tools.
+- `python tests/test_mcp.py` — MCP handshake check.
 - REST API runs on port **8765** (8000 is blocked on this machine).
 
 ## Conventions

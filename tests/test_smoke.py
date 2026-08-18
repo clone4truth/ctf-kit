@@ -1,5 +1,12 @@
-"""Smoke test semua tool (tanpa framework). Jalankan: python test_smoke.py"""
+"""Smoke test semua tool (tanpa framework). Jalankan: python tests/test_smoke.py"""
+import os
 import sys
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+os.chdir(REPO_ROOT)
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -110,3 +117,5 @@ for name, args in TESTS:
     print(f"{'OK  ' if ok else 'FAIL'} {name}: {out.splitlines()[0][:90] if out else ''}")
 
 print(f"\n{len(TESTS) - failed}/{len(TESTS)} passed, {failed} failed")
+if failed > 0:
+    sys.exit(1)

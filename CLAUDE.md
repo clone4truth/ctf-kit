@@ -40,13 +40,13 @@ dashboard with live log console.
    config change): `python scripts/new_tool.py --name <snake_case> --category <cat>
    --summary "..." --params "a:str,b:int"` then implement
    `ctfkit/modules/<name>.py`.
-8. **Verify:** `python test_smoke.py` (expect all OK).
+8. **Verify:** `python tests/test_smoke.py` (expect all OK).
 
 ## Testing & validation
 
-- `python gen_testdata.py` regenerates `testdata/` demo files.
-- `python test_smoke.py` — 54 smoke tests over all tools.
-- `python test_mcp.py` — MCP handshake check.
+- `python tests/gen_testdata.py` regenerates `testdata/` demo files.
+- `python tests/test_smoke.py` — 85 smoke tests over all tools.
+- `python tests/test_mcp.py` — MCP handshake check.
 - Web UI runs on port **8765** (8000 is blocked on this machine).
 
 ## Conventions
