@@ -42,7 +42,7 @@ def tools_list() -> dict:
     categories = {}
     for t in items:
         categories.setdefault(t["category"], {"label": t["category_label"], "tools": []})["tools"].append(t)
-    return {"categories": categories, "total": len(items)}
+    return {"tools": items, "categories": categories, "total": len(items)}
 
 
 @app.post("/api/upload")
@@ -62,14 +62,21 @@ async def upload_file(file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/run")
 async def run(tool_request: dict) -> dict:
-    """Run a tool. body: {name, args}. Executed in a thread pool so the UI never blocks."""
+    """Run a tool. body: {name, args|arguments}. Executed in a thread pool so the UI never blocks."""
     name = tool_request.get("name", "")
-    args = tool_request.get("args", {})
+    args = tool_request.get("arguments") or tool_request.get("args") or {}
     start = time.monotonic()
     result = await asyncio.get_running_loop().run_in_executor(None, run_tool, name, args)
     elapsed = (time.monotonic() - start) * 1000
     log.info("run_tool %s finished in %.0f ms", name, elapsed)
-    return {"name": name, "result": result, "elapsed_ms": round(elapsed)}
+    is_error = isinstance(result, str) and result.startswith("ERROR:")
+    return {
+        "ok": not is_error,
+        "name": name,
+        "result": result,
+        "error": result if is_error else None,
+        "elapsed_ms": round(elapsed)
+    }
 
 
 @app.get("/api/logs")

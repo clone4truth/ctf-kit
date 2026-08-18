@@ -44,10 +44,17 @@ async function init() {
   
   try {
     const res = await fetch("/api/tools");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    state.tools = data.tools || [];
-    state.categories = data.categories || [];
+    let tools = [];
+    if (Array.isArray(data.tools)) {
+      tools = data.tools;
+    } else if (data.categories && typeof data.categories === "object") {
+      Object.values(data.categories).forEach(cat => {
+        if (cat && Array.isArray(cat.tools)) tools.push(...cat.tools);
+      });
+    }
+    state.tools = tools;
+    state.categories = Object.keys(data.categories || {});
 
     const pillTools = $("#pill-tools");
     if (pillTools) pillTools.textContent = `${state.tools.length} Tools`;
