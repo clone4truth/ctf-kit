@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CTF KIT — Main Server Engine (HexStrike-style Architecture)
+"""CTF KIT — Main Server Engine
 
 Core backend server managing 90 security & CTF operations with REST API,
 Swagger UI documentation, and process execution pool.
@@ -43,7 +43,7 @@ BANNER = """[bold cyan]
 
 app = FastAPI(
     title="CTF Kit — AI Security & CTF Engine",
-    description="HexStrike-style Headless Security & CTF Engine exposing 90 tools for AI Agents and REST clients.",
+    description="Headless Security & CTF Engine exposing 90 tools for AI Agents and REST clients.",
     version="2.5.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -166,7 +166,7 @@ def print_server_banner(host: str, port: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="CTF Kit Server (HexStrike Architecture)")
+    parser = argparse.ArgumentParser(description="CTF Kit Main Server Engine")
     parser.add_argument("--host", default="127.0.0.1", help="Host address (default 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Port number (default 8765)")
     args = parser.parse_args()

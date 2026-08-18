@@ -1,4 +1,4 @@
-# CTF KIT — AI-Powered Security & CTF Engine (HexStrike Architecture)
+# CTF KIT — AI-Powered Security & CTF Engine
 
 Modular cybersecurity toolkit covering 90 specialized tools across **Encoding,
 Crypto, Stego, Forensics, Web, Reverse Engineering, Pwn, OSINT**. Designed
@@ -7,7 +7,7 @@ via **Model Context Protocol (MCP)**, alongside a Headless **REST API (OpenAPI /
 
 ## Architecture Flow
 
-The architecture follows the **[HexStrike AI](https://github.com/0x4m4/hexstrike-ai)** dual-surface paradigm:
+Dual-surface security operations platform:
 
 1. **Main Server (`server.py`)**: Standalone FastAPI / Uvicorn server running the execution engine, worker threads, health telemetry, and interactive Swagger UI (`/docs`).
 2. **MCP Server (`mcp_server.py`)**: High-performance stdio server exposing 90 tools to AI Agents with full JSON-RPC schemas.

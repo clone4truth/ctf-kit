@@ -1,12 +1,12 @@
 # CTF KIT — Agent Instructions (universal: opencode, Claude Code, Cursor, Codex, Gemini CLI)
 
 CTF toolkit with 90 tools (encoding, crypto, stego, forensics, web, rev, pwn,
-osint, misc) exposed as a Headless MCP server and REST API (HexStrike Architecture).
+osint, misc) exposed as a Headless MCP server and REST API.
 
 ## Quickstart
 
 ```powershell
-.venv\Scripts\python server.py          # HexStrike-style API Server -> http://localhost:8765/docs
+.venv\Scripts\python server.py          # API Server -> http://localhost:8765/docs
 .venv\Scripts\python mcp_server.py      # MCP server (stdio JSON-RPC for Claude/Cursor/OpenCode)
 ```
 
