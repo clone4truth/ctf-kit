@@ -19,7 +19,9 @@
 
 ---
 
-## 🏛️ MCP Agent Architecture
+## 🏛️ MCP Agent & HexStrike-Style Gateway Architecture
+
+CTF KIT follows the modern **Central FastAPI Gateway + Thin MCP Bridge** pattern (similar to [HexStrike AI](https://github.com/0x4m4/hexstrike-ai)). A single central server (`server.py`) manages execution, telemetry, thread pools, and category routing, while `mcp_server.py` operates as an ultra-fast JSON-RPC bridge with resilient local fallback.
 
 ```mermaid
 graph TB
@@ -27,35 +29,35 @@ graph TB
         A1["<b>Claude Desktop / Code</b><br/><code>AI Pair Programmer</code>"]
         A2["<b>Cursor / Windsurf / VS Code</b><br/><code>IDE AI Assistant</code>"]
         A3["<b>OpenCode / Cline / Copilot</b><br/><code>Autonomous Agent</code>"]
-        A4["<b>REST API / Swagger UI</b><br/><code>Direct HTTP Client</code>"]
+        A4["<b>Swagger UI / Curl</b><br/><code>Direct HTTP Client</code>"]
     end
 
-    subgraph Surfaces ["⚡ Dual Access Surfaces"]
-        MCP["🔌 <b>Headless MCP Server</b><br/><code>mcp_server.py</code><br/><i>JSON-RPC 2.0 via stdio</i>"]
-        REST["🌐 <b>REST API Engine</b><br/><code>server.py</code><br/><i>FastAPI + OpenAPI (Port 8765)</i>"]
+    subgraph Bridge ["🔌 Thin MCP Client Bridge"]
+        MCP["<b>mcp_server.py</b><br/><i>JSON-RPC 2.0 (stdio)</i><br/>⚡ Fast proxy to Gateway + Local Fallback"]
     end
 
-    subgraph Core ["🧠 CTF KIT Core Engine"]
+    subgraph Gateway ["🌐 Central FastAPI Gateway (server.py : Port 8765)"]
+        REST["<b>FastAPI Core Engine & Router</b><br/><code>/api/{category}/{tool}</code> • <code>/api/run</code> • <code>/docs</code>"]
         REG["⚙️ <b>Tool Registry</b> (<code>@tool</code>)<br/>Auto Introspection • Type Coercion • Schema Generator"]
-        LOG["📊 <b>Telemetry & LogBus</b><br/>Rich Live UI • CLI Progress • Trace Logs"]
+        LOG["📊 <b>Telemetry & Dashboard</b><br/>Rich Live UI • Execution Timers • Status Monitor"]
     end
 
     subgraph SecurityModules ["🛠️ 92 Specialized Security Tools (9 Categories)"]
         direction TB
         subgraph TopCat [" "]
-            M1["🔤 <b>Encoding</b> (12)<br/>Base2..85, Morse, ZW, Chain..."]
-            M2["🔐 <b>Crypto</b> (30)<br/>RSA, AES, XOR, Ciphers, Hashes..."]
-            M3["🖼️ <b>Stego</b> (10)<br/>LSB, IHDR, WAV Audio, DTMF..."]
+            M1["🔤 <b>Encoding</b> (12)<br/><code>POST /api/encoding/*</code>"]
+            M2["🔐 <b>Crypto</b> (30)<br/><code>POST /api/crypto/*</code>"]
+            M3["🖼️ <b>Stego</b> (10)<br/><code>POST /api/stego/*</code>"]
         end
         subgraph MidCat [" "]
-            M4["🔍 <b>Forensics</b> (11)<br/>PCAP, USB Key, Triage, Carve..."]
-            M5["🌐 <b>Web</b> (10)<br/>SSTI, Revshell, PHP Filter, SSRF..."]
-            M6["⚙️ <b>Reverse</b> (3)<br/>PE Info, ELF Info, PYC Magic..."]
+            M4["🔍 <b>Forensics</b> (11)<br/><code>POST /api/forensics/*</code>"]
+            M5["🌐 <b>Web</b> (10)<br/><code>POST /api/web/*</code>"]
+            M6["⚙️ <b>Reverse</b> (3)<br/><code>POST /api/rev/*</code>"]
         end
         subgraph BotCat [" "]
-            M7["💥 <b>Pwn</b> (9)<br/>ROP, Format String, Shellcode..."]
-            M8["🛰️ <b>OSINT</b> (3)<br/>DNS Query, Reverse, CRT.sh..."]
-            M9["🎯 <b>Misc & Memory</b> (4)<br/>Planner, Flag, Remember, Recall..."]
+            M7["💥 <b>Pwn</b> (9)<br/><code>POST /api/pwn/*</code>"]
+            M8["🛰️ <b>OSINT</b> (3)<br/><code>POST /api/osint/*</code>"]
+            M9["🎯 <b>Misc & Memory</b> (4)<br/><code>POST /api/misc/*</code>"]
         end
     end
 
@@ -71,8 +73,11 @@ graph TB
     A3 -->|stdio JSON-RPC| MCP
     A4 -->|HTTP REST| REST
 
-    %% Gateway to Core
-    MCP ==> REG
+    %% MCP Bridge to Gateway
+    MCP ==>|HTTP POST /api/...| REST
+    MCP -.->|Resilient Fallback| REG
+
+    %% Gateway Routing
     REST ==> REG
     REG <--> LOG
 
@@ -88,14 +93,14 @@ graph TB
 
     %% Visual Styling & Colors
     classDef clientStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef bridgeStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
     classDef gatewayStyle fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f0fdf4;
-    classDef coreStyle fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#fffbeb;
     classDef moduleStyle fill:#2e1065,stroke:#a855f7,stroke-width:1.5px,color:#faf5ff;
     classDef memStyle fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#fff1f2;
 
     class A1,A2,A3,A4 clientStyle;
-    class MCP,REST gatewayStyle;
-    class REG,LOG coreStyle;
+    class MCP bridgeStyle;
+    class REST,REG,LOG gatewayStyle;
     class M1,M2,M3,M4,M5,M6,M7,M8,M9 moduleStyle;
     class MEM,SKILL,WRITEUP memStyle;
 ```

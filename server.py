@@ -35,6 +35,7 @@ from rich.progress import (
     TimeElapsedColumn
 )
 
+import ctfkit.modules  # noqa: F401
 from ctfkit import __version__
 from ctfkit.registry import TOOLS, run_tool, list_tools, CATEGORIES
 from ctfkit.logging import log
@@ -165,6 +166,7 @@ async def execute_tool(payload: dict) -> dict:
         return {
             "ok": not is_error,
             "name": name,
+            "category": cat,
             "result": result,
             "error": result if is_error else None,
             "elapsed_ms": round(elapsed, 2)
@@ -175,10 +177,46 @@ async def execute_tool(payload: dict) -> dict:
         return {
             "ok": False,
             "name": name,
+            "category": cat,
             "result": f"ERROR: {ex}",
             "error": str(ex),
             "elapsed_ms": round(elapsed, 2)
         }
+
+
+@app.get("/api/categories/{category}", tags=["Categories"])
+@app.get("/api/{category}", tags=["Categories"])
+def get_category_tools(category: str) -> dict:
+    """List all tools within a specific category (e.g. crypto, encoding, web, forensics, pwn, rev, stego, osint, misc)."""
+    items = [t for t in list_tools() if t["category"].lower() == category.lower()]
+    if not items:
+        raise HTTPException(status_code=404, detail=f"Category '{category}' not found or contains no tools.")
+    return {
+        "category": category.lower(),
+        "total": len(items),
+        "tools": items
+    }
+
+
+@app.post("/api/categories/{category}/{tool_name}", tags=["Categories"])
+@app.post("/api/{category}/{tool_name}", tags=["Categories"])
+async def execute_category_tool(category: str, tool_name: str, payload: dict | None = None) -> dict:
+    """Execute a specific security or CTF tool under its dedicated category namespace."""
+    body = payload or {}
+    if isinstance(body, dict) and ("arguments" in body or "args" in body):
+        args = body.get("arguments") or body.get("args") or {}
+    else:
+        args = body
+
+    tool = TOOLS.get(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found.")
+    if tool.get("category", "").lower() != category.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tool '{tool_name}' belongs to category '{tool.get('category')}', not '{category}'."
+        )
+    return await execute_tool({"name": tool_name, "arguments": args})
 
 
 @app.post("/upload", tags=["Files"])
@@ -279,7 +317,7 @@ def main():
 
     animate_initialization()
     print_server_dashboard(args.host, args.port)
-    uvicorn.run("server.py:app", host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
