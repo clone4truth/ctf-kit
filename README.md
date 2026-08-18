@@ -102,23 +102,79 @@ graph TB
 
 ---
 
-## ⚡ Quickstart
+## 🚀 Installation & Setup
 
+### Prerequisites
+- **Python**: 3.10+ (tested on Python 3.10, 3.11, 3.12, 3.13)
+- **Git**: Installed and available in PATH
+
+---
+
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/clone4truth/ctf-kit.git
+cd ctf-kit
+```
+
+---
+
+### Step 2: Create & Activate Virtual Environment
+
+**Windows (PowerShell):**
 ```powershell
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\pip install rich
+.\.venv\Scripts\Activate.ps1
+```
 
-# 1. Start the REST Server (Terminal)
-.venv\Scripts\python server.py          # -> http://localhost:8765/docs
+**Windows (Command Prompt):**
+```cmd
+python -m venv .venv
+.\.venv\Scripts\activate.bat
+```
 
-# 2. Run Headless MCP Server (for AI Agents)
-.venv\Scripts\python mcp_server.py
+**Linux / macOS (Bash / Zsh):**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-# 3. Tests & Validation
-.venv\Scripts\python tests/gen_testdata.py
-.venv\Scripts\python tests/test_smoke.py   # 87 tests covering all tools
-.venv\Scripts\python tests/test_mcp.py     # MCP handshake verification
+---
+
+### Step 3: Install Dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+### Step 4: Generate Test Assets & Validate Installation
+```bash
+# 1. Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
+python tests/gen_testdata.py
+
+# 2. Run smoke tests (verify all 92 security tools)
+python tests/test_smoke.py
+
+# 3. Verify MCP stdio JSON-RPC handshake
+python tests/test_mcp.py
+```
+
+---
+
+## ⚡ Running the Services
+
+### 🌐 1. Start Main REST API Server (FastAPI + Swagger UI)
+```bash
+python server.py
+```
+* **Swagger UI Documentation:** [http://localhost:8765/docs](http://localhost:8765/docs)
+* **ReDoc Interface:** [http://localhost:8765/redoc](http://localhost:8765/redoc)
+* **Telemetry & Health Endpoint:** [http://localhost:8765/health](http://localhost:8765/health)
+
+### 🔌 2. Run Headless MCP Server (for AI Agents)
+```bash
+python mcp_server.py
 ```
 
 ---
