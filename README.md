@@ -1,3 +1,13 @@
+```text
+ ██████╗████████╗███████╗    ██╗  ██╗██╗████████╗
+██╔════╝╚══██╔══╝██╔════╝    ██║ ██╔╝██║╚══██╔══╝
+██║        ██║   █████╗      █████╔╝ ██║   ██║   
+██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
+╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
+ ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
+    ⚡ AI-POWERED CTF & CYBERSECURITY ENGINE ⚡
+```
+
 # CTF KIT — AI-Powered Security & CTF Engine
 
 Modular cybersecurity toolkit covering 90 specialized tools across **Encoding,
