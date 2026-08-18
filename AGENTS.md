@@ -1,15 +1,13 @@
 # CTF KIT — Agent Instructions (universal: opencode, Claude Code, Cursor, Codex, Gemini CLI)
 
 CTF toolkit with 90 tools (encoding, crypto, stego, forensics, web, rev, pwn,
-osint, misc) exposed as a Headless MCP server, Cyberpunk Terminal UI (TUI), and REST API.
+osint, misc) exposed as a Headless MCP server and REST API (HexStrike Architecture).
 
 ## Quickstart
 
 ```powershell
-.venv\Scripts\python tui.py             # Cyberpunk Terminal UI (TUI dashboard)
-.venv\Scripts\python cli.py list        # CLI tool runner & list
-.venv\Scripts\python mcp_server.py      # MCP server (stdio JSON-RPC)
-.venv\Scripts\python api_server.py      # Headless REST API -> http://localhost:8765/docs
+.venv\Scripts\python server.py          # HexStrike-style API Server -> http://localhost:8765/docs
+.venv\Scripts\python mcp_server.py      # MCP server (stdio JSON-RPC for Claude/Cursor/OpenCode)
 ```
 
 ## Working a CTF challenge — REQUIRED WORKFLOW
@@ -22,7 +20,7 @@ osint, misc) exposed as a Headless MCP server, Cyberpunk Terminal UI (TUI), and 
    and recalls prior memory. Write the plan down (todo list) before solving.
 2. **Recall.** `python scripts/recall.py "<problem keywords>"` — read any
    matching `memory/*.md` and skills. Apply prior lessons.
-3. **Solve** using the `ctf-tools` MCP tools (or TUI / CLI). Prefer existing
+3. **Solve** using the `ctf-tools` MCP tools. Prefer existing
    tools; check tool names via `list_tools` / the MCP tool list first.
 4. **Extract the flag — any format.** Do NOT assume `flag{...}`. Flags can be
    `picoCTF{...}`, `HTB{...}`, `COMPFEST{...}`, `flag: xxx`, `FLAG-xxx`, hex
@@ -36,7 +34,7 @@ osint, misc) exposed as a Headless MCP server, Cyberpunk Terminal UI (TUI), and 
    edit the file with the exact step-by-step you used — commands, offsets,
    payloads, BurpSuite workflow. The writeup = your fastest/best technique.
 7. **Reusable technique? Add a tool.** If a technique repeats across
-   challenges, scaffold it and it auto-registers (MCP + TUI + CLI + API, no config change):
+   challenges, scaffold it and it auto-registers (MCP + API, no config change):
    `python scripts/new_tool.py --name <snake_case> --category <cat> --summary "..." --params "a:str,b:int"`
    Then implement the function body in the generated `ctfkit/modules/<name>.py`.
 8. **Verify.** After adding tools: `python test_smoke.py` (expect all OK).

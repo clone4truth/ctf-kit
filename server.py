@@ -158,9 +158,8 @@ def print_server_banner(host: str, port: int):
     table = Table(show_header=False, box=None)
     table.add_row("[bold cyan]Server URL:[/bold cyan]", f"[bold green]http://{host}:{port}[/bold green]")
     table.add_row("[bold cyan]Swagger API Docs:[/bold cyan]", f"[bold yellow]http://{host}:{port}/docs[/bold yellow]")
-    table.add_row("[bold cyan]MCP Stdio Bridge:[/bold cyan]", "[bold white]python mcp_server.py[/bold white]")
-    table.add_row("[bold cyan]Terminal TUI:[/bold cyan]", "[bold white]python tui.py[/bold white]")
-    table.add_row("[bold cyan]Registered Tools:[/bold cyan]", f"[bold magenta]{len(TOOLS)} Tools Across 9 Modules[/bold magenta]")
+    table.add_row("[bold cyan]MCP Stdio Server:[/bold cyan]", "[bold white]python mcp_server.py[/bold white]")
+    table.add_row("[bold cyan]Total Operations:[/bold cyan]", f"[bold magenta]{len(TOOLS)} Tools Across 9 Modules[/bold magenta]")
     
     console.print(Panel(table, title="[bold green]⚡ CTF-KIT SERVER ONLINE[/bold green]", border_style="cyan"))
     console.print("[dim]Press Ctrl+C to terminate server process.[/dim]\n")

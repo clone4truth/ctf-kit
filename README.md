@@ -3,15 +3,14 @@
 Modular cybersecurity toolkit covering 90 specialized tools across **Encoding,
 Crypto, Stego, Forensics, Web, Reverse Engineering, Pwn, OSINT**. Designed
 specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot)
-via **Model Context Protocol (MCP)**, alongside a Cyberpunk **Terminal UI (TUI)**,
-interactive **CLI**, and Headless **REST API (OpenAPI / Swagger)**.
+via **Model Context Protocol (MCP)**, alongside a Headless **REST API (OpenAPI / Swagger)**.
 
-## Surfaces & Interfaces
+## Architecture Flow
 
-1. **Cyberpunk Terminal UI (`tui.py`)**: Interactive terminal console with Rich tables, category browser, live parameter prompts, and instant challenge file triage.
-2. **Headless MCP Server (`mcp_server.py`)**: High-performance stdio server exposing 90 tools to AI Agents with full JSON-RPC schemas.
-3. **Command Line Interface (`cli.py`)**: Direct tool runner and UNIX pipeable CLI.
-4. **Headless REST API (`api_server.py`)**: FastAPI microservice with Swagger documentation at `http://127.0.0.1:8765/docs`.
+The architecture follows the **[HexStrike AI](https://github.com/0x4m4/hexstrike-ai)** dual-surface paradigm:
+
+1. **Main Server (`server.py`)**: Standalone FastAPI / Uvicorn server running the execution engine, worker threads, health telemetry, and interactive Swagger UI (`/docs`).
+2. **MCP Server (`mcp_server.py`)**: High-performance stdio server exposing 90 tools to AI Agents with full JSON-RPC schemas.
 
 ## Quickstart
 
@@ -20,19 +19,11 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\pip install rich
 
-# 1. Cyberpunk Terminal Dashboard (TUI)
-.venv\Scripts\python tui.py
+# 1. Start the Server (Terminal)
+.venv\Scripts\python server.py      # -> http://localhost:8765/docs
 
-# 2. CLI tool runner
-.venv\Scripts\python cli.py list
-.venv\Scripts\python cli.py run caesar --text "Spwwz Hzpwwoi" --shift -1
-.venv\Scripts\python cli.py triage challenge.png
-
-# 3. Headless MCP Server (for AI Agents)
+# 2. Run Headless MCP Server (for AI Agents)
 .venv\Scripts\python mcp_server.py
-
-# 4. Headless REST API (with Swagger UI)
-.venv\Scripts\python api_server.py  # -> http://localhost:8765/docs
 
 # Tests
 .venv\Scripts\python gen_testdata.py
@@ -42,7 +33,7 @@ python -m venv .venv
 
 ## Use with MCP Clients (Claude / Cursor / VS Code / OpenCode)
 
-Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client config.
+Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client config (e.g. `claude_desktop_config.json` or `.cursor/mcp.json`).
 
 ```json
 {
@@ -72,34 +63,23 @@ Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client conf
 | **osint** (3) | dns_query (A/AAAA/MX/NS/TXT/CNAME), dns_reverse, crtsh_subdomains |
 | **misc** (2) | detect_challenge, extract_flags_tool |
 
-## Architecture
+## Project Structure
 
 ```
 ctf-tools/
 ├── ctfkit/
-│   ├── logging.py        # LogBus — streams logs
+│   ├── logging.py        # LogBus & structured logging
 │   ├── registry.py       # @tool() decorator + run_tool + list_tools + auto type coercion
 │   ├── utils.py          # helpers: hex, english scoring, magic bytes, param introspection
 │   └── modules/          # one file per category (encoding, crypto_classic,
 │                         #   crypto_modern, stego, forensics, web, rev_pwn, osint, analyze)
-├── tui.py                # Cyberpunk Terminal User Interface (Rich-powered TUI)
-├── cli.py                # Command Line Tool Runner & Pipeable CLI
+├── server.py             # Main Server Engine (FastAPI / Uvicorn + Swagger docs)
 ├── mcp_server.py         # Headless MCP stdio server (mcp 2.0 MCPServer)
-├── api_server.py         # Headless FastAPI REST Server (OpenAPI /docs)
 ├── memory/               # per-challenge memory + _index.md
 ├── writeups/<category>/  # step-by-step POCs with terminal commands
 ├── test_smoke.py         # 85 smoke tests covering every tool
 └── test_mcp.py           # MCP handshake & protocol test
 ```
-
-## Log console
-
-Every run is logged to the `ctfkit` logger (console + LogBus). The web UI
-streams records through `/api/logs` (SSE) into the **LOG CONSOLE** panel at
-the bottom of the screen, with per-level colors, category chips, a spinner
-and blinking cursor while a tool is running, a "running" status pill in the
-topbar, and a flash highlight on new lines. The MCP server writes logs to
-stderr.
 
 ## Notes
 
