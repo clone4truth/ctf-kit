@@ -50,7 +50,7 @@ BANNER = """[bold cyan]
 ██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
 ╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
  ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
-[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE (96 TOOLS)[/bold green]
+[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE ({len(TOOLS)} TOOLS)[/bold green]
 """
 
 CAT_ICONS = {

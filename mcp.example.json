@@ -8,7 +8,7 @@
       "env": {
         "PYTHONUNBUFFERED": "1"
       },
-      "description": "CTF Kit — AI-powered CTF & security toolkit (96 tools: crypto, stego, forensics, web, rev, pwn, osint)",
+      "description": "CTF Kit — AI-powered CTF & security toolkit (103 tools: crypto, stego, forensics, web, rev, pwn, osint)",
       "timeout": 300,
       "disabled": false
     }

@@ -1,7 +1,8 @@
 # CTF KIT — Agent Instructions (universal: opencode, Claude Code, Cursor, Codex, Gemini CLI)
 
-CTF toolkit with 96 tools (encoding, crypto, stego, forensics, web, rev, pwn,
-osint, misc) exposed as a Headless MCP server and REST API.
+CTF toolkit with 103 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+osint, misc) exposed as a Headless MCP server and REST API, including external
+CLI tool wrappers per category (nmap, ffuf, sqlmap, binwalk, steghide, hashcat...).
 
 ## Quickstart
 

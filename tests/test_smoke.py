@@ -118,6 +118,14 @@ TESTS = [
     ("browser_agent", {"action": "content", "url": "data:text/html,<title>ctf</title><h1>flag{js_rendered}</h1>"}),
     ("browser_agent", {"action": "navigate", "url": "data:text/html,<title>ctf</title><h1>hi</h1>"}),
     ("browser_agent", {"action": "headers", "url": "data:text/html,<h1>x</h1>"}),
+    # --- External CLI wrappers (auto=False: never trigger real installs in tests) ---
+    ("external_recon", {"tool": "nmap", "args": "-sn 127.0.0.1", "auto": False}),
+    ("external_web", {"tool": "ffuf", "args": "-w wordlist -u http://x/", "auto": False}),
+    ("external_forensics", {"tool": "binwalk", "args": "file.bin", "auto": False}),
+    ("external_stego", {"tool": "steghide", "args": "-i img.png", "auto": False}),
+    ("external_crypto", {"tool": "hashcat", "args": "-m 0 hash.txt list.txt", "auto": False}),
+    ("external_rev", {"tool": "objdump", "args": "-d binary", "auto": False}),
+    ("external_available", {}),
 ]
 
 failed = 0
