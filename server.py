@@ -58,15 +58,25 @@ app.add_middleware(
 )
 
 
+import datetime
+
+
+@app.get("/health", tags=["Status"])
 @app.get("/api/health", tags=["Status"])
 def health() -> dict:
-    """Server health status and tool telemetry."""
+    """Comprehensive telemetry, operational readiness, and tool status."""
+    categories = sorted(list({t["category"] for t in TOOLS.values()}))
     return {
-        "status": "healthy",
-        "engine": "ctf-kit",
+        "status": "ok",
+        "ready": True,
         "version": "2.5.0",
-        "tools_count": len(TOOLS),
-        "uptime_seconds": round(time.monotonic(), 2)
+        "server_engine": "CTF Kit",
+        "tools_registered": len(TOOLS),
+        "categories_count": len(categories),
+        "categories": categories,
+        "mcp_enabled": True,
+        "uptime_seconds": round(time.monotonic(), 2),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 
@@ -138,9 +148,10 @@ async def execute_tool(payload: dict) -> dict:
         }
 
 
+@app.post("/upload", tags=["Files"])
 @app.post("/api/upload", tags=["Files"])
 async def upload_challenge_file(file: UploadFile = File(...)) -> dict:
-    """Upload challenge artifact or capture file for local tool inspection."""
+    """Upload challenge artifact (PCAP, firmware, image, binary, zip) for tool analysis."""
     upload_dir = os.path.join(os.path.dirname(__file__), "testdata", "uploads")
     os.makedirs(upload_dir, exist_ok=True)
     clean_name = os.path.basename(file.filename or "upload.bin")
@@ -149,7 +160,13 @@ async def upload_challenge_file(file: UploadFile = File(...)) -> dict:
     with open(file_path, "wb") as f:
         f.write(content)
     rel_path = f"testdata/uploads/{clean_name}"
-    return {"ok": True, "path": rel_path, "filename": clean_name, "size": len(content)}
+    return {
+        "ok": True,
+        "path": rel_path,
+        "filename": clean_name,
+        "size": len(content),
+        "message": f"File uploaded successfully to {rel_path}. Pass this path to tools like triage_file, strings_extract, etc."
+    }
 
 
 def print_server_banner(host: str, port: int):

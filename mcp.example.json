@@ -1,14 +1,43 @@
 {
-  "_comment": "Example MCP Configuration for Claude Desktop, Cursor, VS Code, Gemini, and OpenCode",
-  "mcpServers": {
-    "ctf-tools": {
-      "command": ".venv/Scripts/python",
-      "args": [
-        "e:/tools/ctf-tools/mcp_server.py"
-      ],
-      "env": {
-        "PYTHONUNBUFFERED": "1"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CTF Kit MCP Configuration Templates",
+  "description": "Copy the relevant configuration snippet into your AI client settings.",
+  
+  "windows_example": {
+    "mcpServers": {
+      "ctf-tools": {
+        "command": "E:\\tools\\ctf-tools\\.venv\\Scripts\\python.exe",
+        "args": [
+          "E:\\tools\\ctf-tools\\mcp_server.py"
+        ],
+        "env": {
+          "PYTHONUNBUFFERED": "1"
+        }
       }
     }
+  },
+
+  "linux_macos_example": {
+    "mcpServers": {
+      "ctf-tools": {
+        "command": "/path/to/ctf-tools/.venv/bin/python",
+        "args": [
+          "/path/to/ctf-tools/mcp_server.py"
+        ],
+        "env": {
+          "PYTHONUNBUFFERED": "1"
+        }
+      }
+    }
+  },
+
+  "claude_desktop_config_path": {
+    "windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+    "macos": "~/Library/Application Support/Claude/claude_desktop_config.json"
+  },
+
+  "cursor_config_path": {
+    "workspace": ".cursor/mcp.json",
+    "global": "~/.cursor/mcp.json"
   }
 }

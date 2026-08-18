@@ -26,8 +26,7 @@ def main():
         print("=" * 60)
         print("⚡ CTF-KIT MCP SERVER (stdio mode)")
         print("Listening for JSON-RPC protocol on stdio...")
-        print("• For interactive terminal UI, run: python tui.py")
-        print("• For REST API server, run: python server.py")
+        print("• For REST API & OpenAPI docs, run: python server.py")
         print("• For test handshake, run: python test_mcp.py")
         print("=" * 60)
     try:
