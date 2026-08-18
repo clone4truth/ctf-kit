@@ -19,9 +19,9 @@
 
 ---
 
-## 🏛️ MCP Agent & HexStrike-Style Gateway Architecture
+## 🏛️ MCP Agent & Central Gateway Architecture
 
-CTF KIT follows the modern **Central FastAPI Gateway + Thin MCP Bridge** pattern (similar to [HexStrike AI](https://github.com/0x4m4/hexstrike-ai)). A single central server (`server.py`) manages execution, telemetry, thread pools, and category routing, while `mcp_server.py` operates as an ultra-fast JSON-RPC bridge with resilient local fallback.
+CTF KIT follows the modern **Central FastAPI Gateway + Thin MCP Bridge** pattern. A single central server (`server.py`) manages execution, telemetry, thread pools, and category routing, while `mcp_server.py` operates as an ultra-fast JSON-RPC bridge with resilient local fallback.
 
 ```mermaid
 graph TB

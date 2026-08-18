@@ -4,7 +4,7 @@
 Exposes 92 cybersecurity & CTF operations directly to AI Agents
 (Claude Desktop, Cursor, Cline, Copilot, OpenCode, VS Code) via MCP protocol.
 
-Operates as a HexStrike-style thin client bridge to the central FastAPI Gateway
+Operates as a thin client bridge to the central FastAPI Gateway
 (http://127.0.0.1:8765) with automatic local in-process fallback.
 
 Usage:
@@ -12,6 +12,7 @@ Usage:
 """
 
 import functools
+import inspect
 import json
 import os
 import sys
@@ -37,8 +38,6 @@ server = MCPServer(
 )
 
 
-import inspect
-
 def make_gateway_bridge(meta: dict):
     """Wrap tool function to execute via FastAPI Central Gateway with local fallback."""
     original_fn = meta["fn"]
@@ -55,7 +54,7 @@ def make_gateway_bridge(meta: dict):
         except Exception:
             arguments = dict(kwargs)
 
-        # 2. Attempt execution via central FastAPI Gateway (HexStrike Flow)
+        # 2. Attempt execution via central FastAPI Gateway
         payload = json.dumps(arguments).encode("utf-8")
         req = urllib.request.Request(
             f"{GATEWAY_URL}/api/categories/{category}/{tool_name}",
