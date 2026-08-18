@@ -1,0 +1,13 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "ctfkit",
+    "scripts",
+    "mcp_server.py",
+    "server.py",
+    "test_mcp.py",
+    "test_smoke.py",
+    "gen_testdata.py"
+  ]
+}
