@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from ..flagmeta import detect_ctf, detect_flag, extract_flags, suggested_tools
-from ..registry import tool
+from ..registry import tool, TOOLS
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -32,6 +32,82 @@ def detect_challenge(problem: str) -> str:
         lines.append("MEMORY (prior challenges):")
         lines.extend(f"  - [{s}] {t}" for s, t in hits)
     return "\n".join(lines)
+
+
+@tool(category="misc")
+def analyze_target(target: str) -> str:
+    """Decision engine: analyze a target/problem statement, detect category + platform, recall memory, and recommend the optimal tool chain."""
+    base = detect_challenge(target)
+    chain = select_tools(target)
+    return "\n".join([
+        base,
+        "",
+        "DECISION ENGINE — RECOMMENDED TOOL CHAIN:",
+        chain,
+    ])
+
+
+@tool(category="misc")
+def select_tools(task: str, category: str = "", top: int = 8) -> str:
+    """Decision engine: recommend the best tools for a task by keyword-matching the task against tool names, summaries, and docs.
+
+    :param task: Task description or problem keywords (e.g. 'decode base64 hex flag')
+    :param category: Restrict to one category (encoding, crypto, stego, forensics, web, rev, pwn, osint, misc)
+    :param top: Maximum number of recommendations to return
+    """
+    words = [w for w in re.findall(r"[a-z0-9]{3,}", task.lower())]
+    scored = []
+    for meta in TOOLS.values():
+        if category and meta["category"].lower() != category.lower():
+            continue
+        hay = f"{meta['name']} {meta['summary']} {meta['doc'][:300]}".lower()
+        s = sum(hay.count(w) for w in words)
+        if s:
+            scored.append((s, meta))
+    scored.sort(key=lambda x: -x[0])
+    if not scored:
+        return f"No tools matched '{task}'. Browse all tools via /api/tools or list_tools()."
+    out = [f"TOP {min(top, len(scored))} TOOLS FOR: '{task}'"]
+    for s, m in scored[:top]:
+        params = ", ".join(
+            p["name"] + (f"={p['default']}" if p.get("default") is not None else "")
+            for p in m["params"]
+        )
+        out.append(f"  [{m['category']}] {m['name']} (score {s}) — {m['summary']}")
+        out.append(f"      params: {params or '(none)'}")
+    return "\n".join(out)
+
+
+@tool(category="misc")
+def optimize_parameters(tool_name: str, args_json: str = "") -> str:
+    """Decision engine: return the exact parameter contract for a tool (types, required, defaults, descriptions) and validate provided args.
+
+    :param tool_name: Registered tool name (e.g. 'caesar', 'rsa_fermat')
+    :param args_json: Optional JSON object of proposed arguments to validate against the schema
+    """
+    meta = TOOLS.get(tool_name)
+    if not meta:
+        return f"Unknown tool: {tool_name}. Browse via /api/tools or select_tools."
+    out = [
+        f"PARAMETER CONTRACT: {tool_name} [{meta['category']}]",
+        f"Summary: {meta['summary']}",
+        "",
+    ]
+    for p in meta["params"]:
+        req = "REQUIRED" if p["required"] else f"default={p['default']}"
+        out.append(f"  {p['name']} ({p['type']}) [{req}] {p.get('desc', '')}".rstrip())
+    if args_json:
+        import json as _json
+        try:
+            args = _json.loads(args_json)
+        except ValueError as ex:
+            return "\n".join(out) + f"\n\nInvalid args_json: {ex}"
+        known = {p["name"] for p in meta["params"]}
+        unknown = sorted(k for k in args if k not in known)
+        missing = sorted(p["name"] for p in meta["params"] if p["required"] and p["name"] not in args)
+        out.append("")
+        out.append(f"Provided args: {len(args)} | unknown: {unknown or '-'} | missing required: {missing or '-'}")
+    return "\n".join(out)
 
 
 @tool(category="misc")

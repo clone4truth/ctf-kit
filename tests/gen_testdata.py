@@ -1,4 +1,4 @@
-"""Generate testdata untuk smoke test."""
+"""Generate test data for smoke tests."""
 import math
 import os
 import random
@@ -11,7 +11,7 @@ os.makedirs(TESTDATA_DIR, exist_ok=True)
 
 random.seed(7)
 
-# PNG dengan flag di tEXt chunk
+# PNG with flag in tEXt chunk
 from PIL import Image, PngImagePlugin
 img = Image.new("RGB", (16, 16))
 px = img.load()
@@ -22,7 +22,7 @@ info = PngImagePlugin.PngInfo()
 info.add_text("flag", "flag{hidden_in_text_chunk}")
 img.save(os.path.join(TESTDATA_DIR, "meta2.png"), pnginfo=info)
 
-# PNG dengan flag di LSB
+# PNG with flag in LSB
 px2 = bytearray(img.tobytes())
 msg = b"flag{lsb_hidden}"
 bits = "".join(f"{b:08b}" for b in msg)
@@ -30,11 +30,11 @@ for i, b in enumerate(bits):
     px2[i] = (px2[i] & 0xFE) | int(b)
 Image.frombytes("RGB", (16, 16), bytes(px2)).save(os.path.join(TESTDATA_DIR, "lsb.png"))
 
-# blob berisi PNG tertanam + trailing junk
+# blob with embedded PNG + trailing junk
 blob = b"junk" * 100 + open(os.path.join(TESTDATA_DIR, "meta2.png"), "rb").read() + b"trailing"
 open(os.path.join(TESTDATA_DIR, "blob.bin"), "wb").write(blob)
 
-# zlib stream tersembunyi
+# hidden zlib stream
 payload = b"flag{zlib_stream}" + b"\x00" * 50
 stream = zlib.compress(payload)
 open(os.path.join(TESTDATA_DIR, "zlib.bin"), "wb").write(b"\x41" * 100 + stream + b"\x42" * 100)
@@ -61,7 +61,7 @@ pkt = (
 pcap += struct.pack("<IIII", 0, 0, len(pkt), len(pkt)) + pkt
 open(os.path.join(TESTDATA_DIR, "test.pcap"), "wb").write(bytes(pcap))
 
-# ELF dummy x86-64 dengan PT_GNU_STACK (NX), gadget pop rdi; ret
+# dummy x86-64 ELF with PT_GNU_STACK (NX), pop rdi; ret gadget
 elf_header = struct.pack(
     "<HHIQQQIHHHHHH", 2, 0x3E, 1, 0x401000, 64, 0, 0, 64, 56, 2, 64, 3, 0)
 phdrs = struct.pack("<IIQQQQQQ", 1, 5, 0x400000, 0x400000, 0x1000, 0x1000, 0x1000, 0x1000)  # PT_LOAD RX (executable)
@@ -69,13 +69,13 @@ phdrs += struct.pack("<IIQQQQQQ", 0x6474E551, 6, 0x1000, 0x501000, 0x1000, 0x100
 code = b"\x90" * 32 + b"\x5f\xc3" + b"\x5e\xc3" + b"\x0f\x05\xc3" + b"\x90" * 8
 open(os.path.join(TESTDATA_DIR, "dummy.elf"), "wb").write(b"\x7fELF" + bytes([2, 1, 1, 0, 0]) + bytes(7) + elf_header + phdrs + code)
 
-# PNG dengan IHDR height yang dirusak (dimodifikasi dari 16 menjadi 1, CRC tetap asli)
+# PNG with corrupted IHDR height (modified from 16 to 1, CRC kept original)
 png_raw = bytearray(open(os.path.join(TESTDATA_DIR, "meta2.png"), "rb").read())
 # IHDR chunk: offset 12 is 'IHDR', 16-20 is width (16), 20-24 is height (16)
 png_raw[20:24] = struct.pack(">I", 1)  # tamper height to 1
 open(os.path.join(TESTDATA_DIR, "corrupt_ihdr.png"), "wb").write(png_raw)
 
-# WAV file audio sederhana (16-bit PCM mono 8000Hz) dengan LSB flag
+# simple WAV audio file (16-bit PCM mono 8000Hz) with LSB flag
 import wave
 wav_file = os.path.join(TESTDATA_DIR, "audio.wav")
 with wave.open(wav_file, "wb") as wf:

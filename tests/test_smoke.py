@@ -1,4 +1,4 @@
-"""Smoke test semua tool (tanpa framework). Jalankan: python tests/test_smoke.py"""
+"""Smoke test all tools (no framework). Run: python tests/test_smoke.py"""
 import os
 import sys
 
@@ -109,6 +109,15 @@ TESTS = [
     # --- Autonomous Memory & Skill Tools ---
     ("remember_challenge", {"title": "Smoke Test Chall", "category": "crypto", "tool": "rsa_fermat", "flag": "flag{smoke_test}", "note": "factored close primes"}),
     ("recall_knowledge", {"query": "rsa fermat"}),
+    # --- Decision Engine Tools ---
+    ("analyze_target", {"target": "picoCTF crypto rsa fermat challenge"}),
+    ("select_tools", {"task": "decode base64 hex flag", "category": ""}),
+    ("optimize_parameters", {"tool_name": "caesar"}),
+    ("optimize_parameters", {"tool_name": "rsa_fermat", "args_json": '{"n": 100, "wrong_param": 1}'}),
+    # --- Browser Agent (graceful if Chrome missing) ---
+    ("browser_agent", {"action": "content", "url": "data:text/html,<title>ctf</title><h1>flag{js_rendered}</h1>"}),
+    ("browser_agent", {"action": "navigate", "url": "data:text/html,<title>ctf</title><h1>hi</h1>"}),
+    ("browser_agent", {"action": "headers", "url": "data:text/html,<h1>x</h1>"}),
 ]
 
 failed = 0

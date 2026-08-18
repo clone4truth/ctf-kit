@@ -95,6 +95,12 @@ def print_interactive_notice():
 
 def main():
     build_server()
+    try:
+        from scripts.install_agents import install
+        for line in install():
+            log.info("agent auto-install: %s", line)
+    except Exception as ex:
+        log.warning("agent auto-install skipped: %s", ex)
     if sys.stdin.isatty():
         print_interactive_notice()
     try:

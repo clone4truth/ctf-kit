@@ -12,7 +12,7 @@
 
 # CTF KIT — AI-Powered Security & CTF Engine
 
-**Modular cybersecurity toolkit covering 92 specialized tools across 9 categories.**  
+**Modular cybersecurity toolkit covering 96 specialized tools across 9 categories.**  
 *Designed specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot) via MCP & Headless REST API.*
 
 </div>
@@ -51,13 +51,13 @@ graph TB
         end
         subgraph MidCat [" "]
             M4["🔍 <b>Forensics</b> (11)<br/><code>POST /api/forensics/*</code>"]
-            M5["🌐 <b>Web</b> (10)<br/><code>POST /api/web/*</code>"]
+            M5["🌐 <b>Web</b> (11)<br/><code>POST /api/web/*</code>"]
             M6["⚙️ <b>Reverse</b> (3)<br/><code>POST /api/rev/*</code>"]
         end
         subgraph BotCat [" "]
             M7["💥 <b>Pwn</b> (8)<br/><code>POST /api/pwn/*</code>"]
             M8["🛰️ <b>OSINT</b> (3)<br/><code>POST /api/osint/*</code>"]
-            M9["🎯 <b>Misc & Memory</b> (5)<br/><code>POST /api/misc/*</code>"]
+            M9["🎯 <b>Misc & Memory</b> (8)<br/><code>POST /api/misc/*</code>"]
         end
     end
 
@@ -184,9 +184,25 @@ python mcp_server.py
 
 ---
 
-## 🔌 Use with MCP Clients (Claude / Cursor / VS Code / OpenCode)
+## 🔌 Use with MCP Clients (Claude / Cursor / VS Code / OpenCode / Other Agents)
 
-Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client config (e.g. `claude_desktop_config.json` or `.cursor/mcp.json`):
+### Auto-Install into App Config Folders
+
+Agent integration is NOT kept in repo dot-directories — no project-level agent
+config or plugin folders needed. On every `mcp_server.py` start (and
+via `python scripts/install_agents.py`), everything is installed idempotently
+into each agent CLI's own config folder:
+
+| Artifact | Repo source | Installed to |
+|---|---|---|
+| ctf-memory plugin | `plugins/ctf-memory.js` | `~/.config/opencode/plugins/` + `plugin` array (opencode); at runtime it also writes CTF skills to `~/.agents/skills` and `~/.claude/skills` |
+| `ctf-tools` MCP server | `mcp_server.py` (auto) | `~/.config/opencode/opencode.json` (`mcp`), `~/.claude.json`, `~/.cursor/mcp.json`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json` (`mcpServers`) |
+
+- **OS-aware**: uses `.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on Linux/macOS (falls back to the running interpreter if the venv is missing).
+- **Idempotent**: existing entries (other MCP servers, plugins, providers, project state) in every target config are preserved; missing configs are skipped.
+- Project-level `.mcp.json` (in this repo) still works for clients that prefer local configs — see `mcp.example.json` for the template.
+
+Manual registration for any other client (e.g. `claude_desktop_config.json` or `.cursor/mcp.json`):
 
 ```json
 {
@@ -233,7 +249,7 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 
 ---
 
-## 🧰 Complete Tool Arsenal (92 Tools across 9 Categories)
+## 🧰 Complete Tool Arsenal (96 Tools across 9 Categories)
 
 | Category | Count | Tools & Descriptions |
 |---|---|---|
@@ -241,28 +257,30 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 | **crypto** | 30 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill` 2x2, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common` |
 | **stego** | 10 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB extraction), `stego_dtmf_detect` (keypad tones), `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare` |
 | **forensics** | 11 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map` |
-| **web** | 10 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `sqli_payloads` |
+| **web** | 11 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `sqli_payloads`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers) |
 | **rev** | 3 | `pe_info` (Windows PE32/PE32+ mitigations & sections), `elf_info` (Linux ELF header & symbols), `pyc_magic_info` (Python bytecode version identifier) |
 | **pwn** | 8 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools exploit scaffolding), `shellcode_multi` (Linux x86/x64, Win x86/x64, ARM), `shellcode_x64`, `debruijn`, `debruijn_find` |
 | **osint** | 3 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (Certificate Transparency logs) |
-| **misc** | 5 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection) |
+| **misc** | 8 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection), `analyze_target` + `select_tools` + `optimize_parameters` (decision engine) |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-ctf-tools/
+ctf-kit/
 ├── ctfkit/
 │   ├── logging.py          # LogBus & structured rich logging
 │   ├── registry.py         # @tool() decorator + run_tool + list_tools + auto type coercion
+│   ├── cache.py            # LRU result cache (hits/misses/evictions via /api/cache/stats)
 │   ├── utils.py            # shared helpers: hex, english scoring, magic bytes, param introspection
-│   └── modules/            # category implementations (encoding, crypto, stego, forensics, web, rev_pwn, osint, analyze)
+│   └── modules/            # category implementations (encoding, crypto, stego, forensics, web, rev_pwn, osint, analyze, browser)
 ├── tests/                  # automated test suite & generators
 │   ├── gen_testdata.py     # generate test files (PCAP, PNG, audio WAV, ELF, PE)
 │   ├── test_smoke.py       # 87 smoke tests covering all tools
 │   └── test_mcp.py         # MCP JSON-RPC stdio handshake & protocol test
-├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool)
+├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool, writeup, install_agents)
+├── plugins/                # ctf-memory.js (auto-installed into all agent CLI configs by scripts/install_agents.py)
 ├── server.py               # Main Central Gateway (FastAPI / Uvicorn + Swagger docs at /docs)
 ├── mcp_server.py           # Headless MCP stdio server & Gateway Bridge
 ├── memory/                 # per-challenge persistent memory + _index.md
@@ -280,3 +298,6 @@ ctf-tools/
 - `stego_lsb` supports custom bit planes (LSB/MSB) and configurable bit extraction order.
 - `pcap_http` contains a lightweight, zero-dependency parser for Ethernet/IPv4/TCP streams.
 - Synthetic demo test assets are located in `testdata/` (regenerated via `python tests/gen_testdata.py`).
+- **Decision Engine**: `POST /api/intelligence/{analyze-target,select-tools,optimize-parameters}` — category detection, keyword-ranked tool recommendation, and parameter contracts from the registry.
+- **Smart Cache**: LRU (256 entries) on all tool results — `GET /api/cache/stats` for hit/miss/eviction telemetry.
+- **Browser Agent**: `browser_agent` (Selenium 4.6+, headless Chrome auto-managed) for CTF web challenges — dump JS-rendered content, screenshots, form recon, security headers.

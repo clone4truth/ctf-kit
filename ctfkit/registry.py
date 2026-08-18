@@ -1,12 +1,13 @@
-"""Registri tool terpusat.
+"""Central tool registry.
 
-Setiap module mendaftarkan fungsi dengan decorator @tool(...).
-Registry dipakai oleh MCP bridge (mcp_server.py) dan web UI (web/app.py),
-sehingga satu definisi tool -> dua permukaan (MCP + UI).
+Each module registers functions with the @tool(...) decorator.
+The registry is used by the MCP bridge (mcp_server.py) and the REST gateway
+(server.py), so a single tool definition is exposed through two surfaces (MCP + REST).
 """
 
 import traceback
 
+from .cache import get as cache_get, put as cache_put
 from .logging import log
 from .utils import tool_params
 
@@ -70,6 +71,12 @@ def run_tool(name: str, args: dict) -> str:
 
     if "path" in sig_args and isinstance(sig_args["path"], str):
         sig_args["path"] = sig_args["path"].replace("\\", "/")
+
+    cached = cache_get(name, sig_args)
+    if cached is not None:
+        log.info("[%s] %s cache HIT", meta["category"], name)
+        return cached
+
     import time as _time
     _start = _time.monotonic()
     log.info("[%s] %s running: %s", meta["category"], name,
@@ -78,6 +85,8 @@ def run_tool(name: str, args: dict) -> str:
         result = fn(**sig_args)
         if not isinstance(result, str):
             result = str(result)
+        if not result.startswith("ERROR"):
+            cache_put(name, sig_args, result)
         log.info("[%s] %s done in %.2fs (%d chars)", meta["category"], name,
                  _time.monotonic() - _start, len(result))
         return result

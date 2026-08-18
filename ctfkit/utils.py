@@ -98,7 +98,7 @@ def detect_type(data: bytes) -> str:
     return "Unknown"
 
 # ---------------------------------------------------------------------------
-# Introspection param untuk UI/MCP
+# Param introspection for MCP/UI
 # ---------------------------------------------------------------------------
 
 _PARAM_DESC_RE = re.compile(r":param\s+(\w+)\s*:\s*([^\n]+)")

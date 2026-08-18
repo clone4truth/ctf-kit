@@ -5,3 +5,4 @@ fastapi
 uvicorn
 dnspython
 rich
+selenium

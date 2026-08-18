@@ -37,6 +37,7 @@ from rich.progress import (
 
 import ctfkit.modules  # noqa: F401
 from ctfkit import __version__
+from ctfkit.cache import snapshot as cache_snapshot
 from ctfkit.registry import TOOLS, run_tool, list_tools, CATEGORIES
 from ctfkit.logging import log
 
@@ -49,7 +50,7 @@ BANNER = """[bold cyan]
 ██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
 ╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
  ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
-[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE (90 TOOLS)[/bold green]
+[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE (96 TOOLS)[/bold green]
 """
 
 CAT_ICONS = {
@@ -182,6 +183,30 @@ async def execute_tool(payload: dict) -> dict:
             "error": str(ex),
             "elapsed_ms": round(elapsed, 2)
         }
+
+
+@app.get("/api/cache/stats", tags=["Intelligence"])
+def get_cache_stats() -> dict:
+    """LRU result-cache performance statistics (hits, misses, evictions)."""
+    return {"ok": True, **cache_snapshot()}
+
+
+@app.post("/api/intelligence/analyze-target", tags=["Intelligence"])
+def intel_analyze_target(payload: dict) -> dict:
+    """Decision engine: analyze a target/problem statement and recommend a tool chain."""
+    return {"ok": True, "result": run_tool("analyze_target", payload)}
+
+
+@app.post("/api/intelligence/select-tools", tags=["Intelligence"])
+def intel_select_tools(payload: dict) -> dict:
+    """Decision engine: recommend the best tools for a task."""
+    return {"ok": True, "result": run_tool("select_tools", payload)}
+
+
+@app.post("/api/intelligence/optimize-parameters", tags=["Intelligence"])
+def intel_optimize_parameters(payload: dict) -> dict:
+    """Decision engine: parameter contract + validation for a tool."""
+    return {"ok": True, "result": run_tool("optimize_parameters", payload)}
 
 
 @app.get("/api/categories/{category}", tags=["Categories"])
