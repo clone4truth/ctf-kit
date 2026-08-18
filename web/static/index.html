@@ -3,53 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CTF KIT — Competitive Toolkit</title>
+<title>CTF KIT — Competitive Cybersecurity Toolkit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<div class="cyber-bg"></div>
 <div class="scanlines"></div>
 
+<!-- Top Navigation Bar -->
 <header class="topbar">
   <div class="brand">
-    <span class="brand-mark">▮▮</span>
+    <div class="brand-badge">
+      <span class="pulse-ring"></span>
+      <span class="brand-icon">⚡</span>
+    </div>
     <div class="brand-text">
-      <h1>CTF<span class="accent">KIT</span></h1>
-      <p class="subtitle">competitive toolkit — crypto · stego · forensics · web · rev · pwn · osint</p>
+      <div class="brand-title">CTF<span class="gradient-text">KIT</span> <span class="version-tag">v2.5 PRO</span></div>
+      <p class="subtitle">Competitive CTF Solving Engine · 90 Operations</p>
     </div>
   </div>
-  <div class="status-pills">
-    <span class="pill hidden" id="pill-running"><span class="dot warn"></span> running: <span class="run-name">-</span><span class="dots"><span></span><span></span><span></span></span></span>
-    <span class="pill" id="pill-tools">0 tools</span>
-    <span class="pill" id="pill-api"><span class="dot"></span> API online</span>
-    <span class="pill" id="pill-mcp"><span class="dot"></span> MCP ready</span>
+
+  <div class="header-search">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input id="global-search" type="text" placeholder="Search 90 tools... (Press '/' or Ctrl+K)" autocomplete="off" spellcheck="false">
+      <kbd class="kbd-shortcut">Ctrl K</kbd>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <button id="btn-triage-modal" class="action-btn glow-btn" title="Quick Auto-Triage File">
+      <span class="btn-icon">🎯</span> Auto-Triage File
+    </button>
+    <div class="status-pills">
+      <span class="pill hidden" id="pill-running">
+        <span class="spinner-dot"></span>
+        <span class="run-text">Executing <strong class="run-name">-</strong></span>
+      </span>
+      <span class="pill tool-count-pill" id="pill-tools">90 Tools</span>
+      <span class="pill status-pill online" id="pill-api" title="API Status">
+        <span class="dot"></span> API
+      </span>
+      <span class="pill status-pill online" id="pill-mcp" title="MCP Server (stdio)">
+        <span class="dot mcp-dot"></span> MCP
+      </span>
+    </div>
   </div>
 </header>
 
+<!-- Main App Layout -->
 <div class="layout">
+  <!-- Left Sidebar -->
   <aside class="sidebar">
-    <div class="search-wrap">
-      <input id="search" type="text" placeholder="search tool… (e.g. xor, lsb, jwt)">
+    <div class="sidebar-header">
+      <span class="sidebar-title">CATEGORIES</span>
+      <span class="sidebar-badge" id="sidebar-total">90</span>
     </div>
-    <nav id="catnav"></nav>
+    <nav id="catnav" class="catnav"></nav>
+    
+    <div class="sidebar-footer">
+      <div class="quick-tips">
+        <div class="tip-title">⚡ SPEED WORKFLOW</div>
+        <div class="tip-desc">Run <code>detect_challenge</code> first, solve with tools, then auto-save with <code>scripts/remember.py</code>.</div>
+      </div>
+    </div>
   </aside>
 
+  <!-- Content Workspace -->
   <main class="content">
+    <!-- Category & Filter Header -->
+    <div class="content-header" id="content-header">
+      <div class="header-info">
+        <h2 id="active-cat-title">All Tools</h2>
+        <p id="active-cat-desc">Browse and execute 90 competitive tools across cryptography, forensics, steganography, web, and binary exploitation.</p>
+      </div>
+      <div class="quick-tags" id="quick-tags"></div>
+    </div>
+
+    <!-- Tool Grid View -->
     <div id="toolgrid" class="toolgrid"></div>
+
+    <!-- Tool Execution Studio (Detail Workspace) -->
     <div id="detail" class="detail hidden"></div>
   </main>
 </div>
 
+<!-- Modal Quick Auto-Triage -->
+<div id="triage-modal" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title"><span class="icon">🎯</span> Quick Challenge Auto-Triage</div>
+      <button class="modal-close" id="btn-close-triage">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">Drop any mysterious challenge file here to instantly run magic detection, entropy, strings, embedded zlib, format inspection, and flag extraction in 1 click.</p>
+      <div class="triage-dropzone" id="triage-dropzone">
+        <input type="file" id="triage-file-input" style="display:none">
+        <div class="drop-icon">📁</div>
+        <div class="drop-title">Drag & Drop Challenge File Here</div>
+        <div class="drop-sub">or click to browse local files</div>
+      </div>
+      <div id="triage-status" class="triage-status hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Live Log Console Terminal Dock -->
 <section id="logdock" class="logdock">
   <div class="logdock-head">
-    <span class="logdock-title"><span class="blink">▸</span> LOG CONSOLE</span>
+    <div class="logdock-title-wrap">
+      <span class="terminal-dot red"></span>
+      <span class="terminal-dot yellow"></span>
+      <span class="terminal-dot green"></span>
+      <span class="logdock-title">LIVE STREAMING CONSOLE</span>
+      <span class="live-tag">LIVE SSE</span>
+    </div>
+    <div class="logdock-filters">
+      <button class="log-filter-btn active" data-filter="all">ALL</button>
+      <button class="log-filter-btn" data-filter="INFO">INFO</button>
+      <button class="log-filter-btn" data-filter="ERROR">ERRORS</button>
+    </div>
     <div class="logdock-actions">
-      <button id="btn-clear-log" class="mini-btn" title="clear">clear</button>
-      <button id="btn-toggle-log" class="mini-btn" title="collapse">_</button>
+      <button id="btn-autoscroll" class="mini-btn active" title="Toggle Autoscroll">Scroll: ON</button>
+      <button id="btn-clear-log" class="mini-btn" title="Clear Console">Clear</button>
+      <button id="btn-toggle-log" class="mini-btn toggle-btn" title="Collapse/Expand Log Console">_</button>
     </div>
   </div>
   <div id="logbody" class="logbody"></div>
 </section>
 
+<!-- Notification Toasts -->
 <div id="toasts" class="toasts"></div>
 
 <script src="/static/app.js"></script>

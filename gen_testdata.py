@@ -1,4 +1,5 @@
 """Generate testdata untuk smoke test."""
+import math
 import os
 import random
 import struct
@@ -64,5 +65,52 @@ phdrs = struct.pack("<IIQQQQQQ", 1, 5, 0x400000, 0x400000, 0x1000, 0x1000, 0x100
 phdrs += struct.pack("<IIQQQQQQ", 0x6474E551, 6, 0x1000, 0x501000, 0x1000, 0x1000, 0x1000, 0x1000)  # PT_GNU_STACK RW
 code = b"\x90" * 32 + b"\x5f\xc3" + b"\x5e\xc3" + b"\x0f\x05\xc3" + b"\x90" * 8
 open("testdata/dummy.elf", "wb").write(b"\x7fELF" + bytes([2, 1, 1, 0, 0]) + bytes(7) + elf_header + phdrs + code)
+
+# PNG dengan IHDR height yang dirusak (dimodifikasi dari 16 menjadi 1, CRC tetap asli)
+png_raw = bytearray(open("testdata/meta2.png", "rb").read())
+# IHDR chunk: offset 12 is 'IHDR', 16-20 is width (16), 20-24 is height (16)
+png_raw[20:24] = struct.pack(">I", 1)  # tamper height to 1
+open("testdata/corrupt_ihdr.png", "wb").write(png_raw)
+
+# WAV file audio sederhana (16-bit PCM mono 8000Hz) dengan LSB flag
+import wave
+wav_file = "testdata/audio.wav"
+with wave.open(wav_file, "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(8000)
+    samples = []
+    wav_secret = b"flag{audio_lsb_found}"
+    wav_bits = "".join(f"{b:08b}" for b in wav_secret)
+    for i in range(len(wav_bits) + 100):
+        val = int(10000 * math.sin(2 * math.pi * 440 * i / 8000))
+        bit = int(wav_bits[i]) if i < len(wav_bits) else 0
+        val = (val & ~1) | bit
+        samples.append(val)
+    wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+# Minimal Windows PE executable (PE32+)
+pe_data = bytearray(b"MZ" + b"\x00" * 58 + struct.pack("<I", 0x40))  # e_lfanew = 0x40
+pe_data += b"PE\x00\x00"  # Signature
+pe_data += struct.pack("<HHIIIHH", 0x8664, 1, 0x60000000, 0, 0, 0xf0, 0x0002)  # COFF: AMD64, 1 section, EXECUTABLE
+# Optional Header (PE32+ 0x20b)
+pe_data += struct.pack("<HBBIIIIIIQIIHH", 0x20b, 1, 0, 0x200, 0x200, 0, 0x1000, 0x1000, 0, 0x140000000, 0x1000, 0x200, 6, 0)
+pe_data += b"\x00" * (0xf0 - 44)  # pad optional header
+# Section .text
+pe_data += b".text\x00\x00\x00" + struct.pack("<IIIIIIHHI", 0x100, 0x1000, 0x200, 0x200, 0, 0, 0, 0, 0x60000020)
+pe_data += b"\x90" * 512
+open("testdata/dummy.exe", "wb").write(pe_data)
+
+# Pseudo-encrypted ZIP
+import zipfile
+import io
+zip_buf = io.BytesIO()
+with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr("secret.txt", "flag{pseudo_zip_unlocked}")
+zip_bytes = bytearray(zip_buf.getvalue())
+# Set bit 0 of general purpose flag in Local File Header (offset 6)
+if zip_bytes[:4] == b"PK\x03\x04":
+    zip_bytes[6] |= 0x01
+open("testdata/pseudo.zip", "wb").write(zip_bytes)
 
 print("testdata ready")

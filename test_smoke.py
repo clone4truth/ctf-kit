@@ -1,4 +1,8 @@
 """Smoke test semua tool (tanpa framework). Jalankan: python test_smoke.py"""
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import ctfkit.modules  # noqa
 from ctfkit.registry import run_tool
 
@@ -57,6 +61,44 @@ TESTS = [
     ("debruijn_find", {"substring": "abba"}),
     ("dns_query", {"domain": "example.com", "record": "A"}),
     ("dns_reverse", {"ip": "8.8.8.8"}),
+    # --- New Encoding Tools ---
+    ("decode_base45", {"encoded": "%69 VD92EX0"}),
+    ("decode_base91", {"encoded": ">Ecl bloom"}),
+    ("encode_zero_width", {"secret": "flag{zw}", "cover_text": "CTF"}),
+    ("decode_zero_width", {"text": "C\u200b\u200c\u200b\u200c\u200b\u200c\u200b\u200cTF"}),
+    ("decode_chain", {"data": "WVhWc2JHOXdaWEpmWVc1a2FYTnBZMlZzYm10bGJtUnZkR0ZzZVRwd1pYSnZJSGQxZFhSbGJuUnZZM2xzWlNCb2IzVnlaVzVu", "max_depth": 5}),
+    # --- New Crypto Tools ---
+    ("rsa_wiener", {"n": 160523347, "e": 6072897, "ciphertext": 0}),
+    ("rsa_fermat", {"n": 1000000007 * 1000000009, "e": 65537, "ciphertext": 0, "max_iter": 1000}),
+    ("rsa_common_modulus", {"n": 3233, "e1": 17, "e2": 19, "c1": pow(42, 17, 3233), "c2": pow(42, 19, 3233)}),
+    ("rsa_hastad", {"ciphertexts_csv": f"{pow(3, 3, 101)}, {pow(3, 3, 103)}, {pow(3, 3, 107)}", "moduli_csv": "101, 103, 107", "e": 3}),
+    ("rsa_parse_key", {"key_data_or_path": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7vbqajDw4o6gJy8SGKdwDe3Pn\nyN1I5a3G8aQUhI1F8V+pX9w3+7uJjN9W7xL1C2y3q4Z4o5Jk9a0b1c2d3e4f5g==\n-----END PUBLIC KEY-----"}),
+    ("xor_crib_drag", {"ct1_hex": "1b1e15101b1e1510", "crib": "flag{"}),
+    ("lcg_solve", {"states_csv": "25, 40, 55, 70, 85, 100", "m": 101}),
+    ("hash_length_extension", {"original_data": "user=guest", "append_data": "&role=admin", "original_hash": "e99a18c428cb38d5f260853678922e03", "key_length": 16, "algorithm": "md5"}),
+    # --- New Stego Tools ---
+    ("png_fix_ihdr", {"image_path": "testdata/corrupt_ihdr.png"}),
+    ("stego_audio_wav", {"wav_path": "testdata/audio.wav", "bit_plane": 0}),
+    ("stego_dtmf_detect", {"wav_path": "testdata/audio.wav"}),
+    # --- New Forensics Tools ---
+    ("pcap_dns_exfil", {"pcap_path": "testdata/test.pcap"}),
+    ("pcap_usb_keystrokes", {"pcap_path": "testdata/test.pcap"}),
+    ("zip_fix_pseudo_encrypt", {"zip_path": "testdata/pseudo.zip"}),
+    ("exif_gps_map", {"image_path": "testdata/meta2.png"}),
+    # --- New Web Tools ---
+    ("ssti_payloads", {"engine": "jinja2", "command": "id"}),
+    ("revshell_generator", {"ip": "10.10.14.5", "port": 4444, "shell_type": "bash", "encoding": "raw"}),
+    ("php_filter_chain", {"resource": "flag.php", "action": "base64"}),
+    ("ssrf_obfuscator", {"ip_or_host": "127.0.0.1", "port": 80}),
+    ("jwt_key_confusion", {"token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiZ3Vlc3QifQ.sig", "rsa_public_key_pem": "test_public_key_bytes"}),
+    # --- New Rev & Pwn Tools ---
+    ("pe_info", {"path": "testdata/dummy.exe"}),
+    ("fmtstr_payload_gen", {"offset": 6, "target_addr": "0x404020", "write_val": "0x1337", "arch": "64"}),
+    ("pwn_template", {"binary_path": "./vuln", "remote_host": "chall.ctf.org", "remote_port": 1337}),
+    ("pyc_magic_info", {"pyc_path_or_hex": "a70d0d0a"}),
+    ("shellcode_multi", {"arch": "x86", "kind": "execve_sh"}),
+    # --- New Master Triage Tool ---
+    ("triage_file", {"path": "testdata/meta2.png"}),
 ]
 
 failed = 0

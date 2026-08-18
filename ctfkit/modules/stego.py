@@ -161,3 +161,175 @@ def stego_compare(path_a: str, path_b: str) -> str:
     if len(diffs) > 50:
         out.append(f"... and {len(diffs)-50} more.")
     return "\n".join(out)
+
+
+@tool(category="stego")
+def png_fix_ihdr(image_path: str, out_path: str = "") -> str:
+    """Fix PNG image dimensions by brute-forcing width/height matching the IHDR chunk CRC32."""
+    import struct
+    import zlib
+    
+    data = open(image_path, "rb").read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "Not a valid PNG file."
+    
+    if len(data) < 33 or data[12:16] != b"IHDR":
+        return "Cannot find IHDR chunk at expected offset 12."
+    
+    curr_w, curr_h = struct.unpack(">II", data[16:24])
+    rest_ihdr = data[24:29]  # bit_depth, color_type, compression, filter, interlace
+    expected_crc = struct.unpack(">I", data[29:33])[0]
+    curr_crc = zlib.crc32(data[12:29]) & 0xFFFFFFFF
+    
+    if curr_crc == expected_crc:
+        return f"IHDR CRC32 is already valid: 0x{expected_crc:08x} (Width: {curr_w}, Height: {curr_h})."
+    
+    # Brute-force dimensions
+    found = None
+    # First search assuming width is correct and height was cropped (most common CTF trick)
+    for h in range(1, 4096):
+        test_payload = b"IHDR" + struct.pack(">II", curr_w, h) + rest_ihdr
+        if (zlib.crc32(test_payload) & 0xFFFFFFFF) == expected_crc:
+            found = (curr_w, h)
+            break
+            
+    # If not found, search both width and height
+    if not found:
+        for w in range(1, 2048):
+            for h in range(1, 2048):
+                test_payload = b"IHDR" + struct.pack(">II", w, h) + rest_ihdr
+                if (zlib.crc32(test_payload) & 0xFFFFFFFF) == expected_crc:
+                    found = (w, h)
+                    break
+            if found:
+                break
+                
+    if not found:
+        return f"Could not find dimensions matching CRC 0x{expected_crc:08x} (Current CRC: 0x{curr_crc:08x})."
+    
+    w_new, h_new = found
+    fixed_data = data[:16] + struct.pack(">II", w_new, h_new) + data[24:]
+    
+    dest = out_path or (os.path.splitext(image_path)[0] + "_fixed.png")
+    with open(dest, "wb") as f:
+        f.write(fixed_data)
+        
+    return (f"🏆 PNG IHDR Dimensions Successfully Recovered!\n"
+            f"Original Dimensions : {curr_w} x {curr_h} (CRC mismatch: 0x{curr_crc:08x})\n"
+            f"Recovered Dimensions: {w_new} x {h_new} (CRC valid: 0x{expected_crc:08x})\n"
+            f"Saved fixed PNG to  : {dest}")
+
+
+@tool(category="stego")
+def stego_audio_wav(wav_path: str, bit_plane: int = 0, max_bytes: int = 500) -> str:
+    """Extract LSB steganography data from uncompressed WAV audio files."""
+    import wave
+    try:
+        with wave.open(wav_path, "rb") as wf:
+            n_channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            n_frames = wf.getnframes()
+            frames = wf.readframes(min(n_frames, 2000000))
+    except Exception as ex:
+        return f"Failed to open WAV audio file: {ex}"
+    
+    # Extract samples
+    bits = []
+    if sampwidth == 1:
+        # 8-bit unsigned
+        for b in frames:
+            bits.append((b >> bit_plane) & 1)
+    elif sampwidth == 2:
+        # 16-bit signed
+        import struct
+        samples = struct.unpack(f"<{len(frames)//2}h", frames)
+        for s in samples:
+            bits.append((s >> bit_plane) & 1)
+    else:
+        return f"Unsupported sample width: {sampwidth * 8}-bit. Supported: 8-bit or 16-bit PCM."
+        
+    out = bytearray()
+    for i in range(0, len(bits) - 7, 8):
+        byte = 0
+        for bit in bits[i:i + 8]:
+            byte = (byte << 1) | bit
+        out.append(byte)
+        if max_bytes and len(out) >= max_bytes:
+            break
+            
+    return (f"WAV Audio Stego Extracted:\n"
+            f"Channels: {n_channels} | Rate: {framerate} Hz | Depth: {sampwidth*8}-bit | Bit-Plane: {bit_plane}\n"
+            f"Extracted {len(out)} bytes:\n"
+            f"hex: {out[:200].hex()}\n"
+            f"ascii: {printable(out, 300)}")
+
+
+@tool(category="stego")
+def stego_dtmf_detect(wav_path: str) -> str:
+    """Decode DTMF (Dual-Tone Multi-Frequency) phone dial keypad tones from a WAV audio file."""
+    import wave
+    import math
+    import struct
+    
+    try:
+        with wave.open(wav_path, "rb") as wf:
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            frames = wf.readframes(wf.getnframes())
+    except Exception as ex:
+        return f"Failed to open WAV: {ex}"
+    
+    if sampwidth == 1:
+        samples = [b - 128 for b in frames]
+    elif sampwidth == 2:
+        samples = list(struct.unpack(f"<{len(frames)//2}h", frames))
+    else:
+        return f"Unsupported audio bit depth: {sampwidth * 8}-bit."
+        
+    low_freqs = [697, 770, 852, 941]
+    high_freqs = [1209, 1336, 1477, 1633]
+    dtmf_map = {
+        (697, 1209): "1", (697, 1336): "2", (697, 1477): "3", (697, 1633): "A",
+        (770, 1209): "4", (770, 1336): "5", (770, 1477): "6", (770, 1633): "B",
+        (852, 1209): "7", (852, 1336): "8", (852, 1477): "9", (852, 1633): "C",
+        (941, 1209): "*", (941, 1336): "0", (941, 1477): "#", (941, 1633): "D",
+    }
+    
+    def goertzel(samples_chunk, target_freq, sample_rate):
+        n = len(samples_chunk)
+        k = int(0.5 + (n * target_freq) / sample_rate)
+        omega = (2.0 * math.pi * k) / n
+        coeff = 2.0 * math.cos(omega)
+        q0 = q1 = q2 = 0.0
+        for s in samples_chunk:
+            q0 = coeff * q1 - q2 + s
+            q2 = q1
+            q1 = q0
+        return q1 * q1 + q2 * q2 - coeff * q1 * q2
+    
+    chunk_size = int(framerate * 0.04)  # 40ms window
+    decoded = []
+    last_char = None
+    
+    for i in range(0, len(samples) - chunk_size, chunk_size):
+        chunk = samples[i:i + chunk_size]
+        # Energy threshold
+        energy = sum(s * s for s in chunk) / max(len(chunk), 1)
+        if energy < 100000:
+            last_char = None
+            continue
+            
+        best_low = max(low_freqs, key=lambda f: goertzel(chunk, f, framerate))
+        best_high = max(high_freqs, key=lambda f: goertzel(chunk, f, framerate))
+        
+        char = dtmf_map.get((best_low, best_high))
+        if char:
+            if char != last_char:
+                decoded.append(char)
+                last_char = char
+        else:
+            last_char = None
+            
+    res = "".join(decoded)
+    return f"DTMF Keypad Sequence: {res or 'No clear DTMF tones detected.'}"

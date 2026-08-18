@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+import urllib.parse
 
 from ..registry import tool
 from ..utils import from_hex, from_b64, b64, printable
@@ -231,3 +232,332 @@ def hash_crack_common(hash_hex: str, wordlist_path: str = "", max_lines: int = 1
     if found:
         return f"Found ({algo}): {found}"
     return f"Not found in {path} (max {max_lines} lines)."
+
+
+def _isqrt(n: int) -> int:
+    """Integer square root using math.isqrt or Newton's method."""
+    import math
+    if hasattr(math, "isqrt"):
+        return math.isqrt(n)
+    if n <= 0:
+        return 0
+    x = int(math.isqrt(n))
+    return x
+
+
+@tool(category="crypto")
+def rsa_wiener(n: int, e: int, ciphertext: int = 0) -> str:
+    """Wiener's attack for RSA with small private exponent d (d < 1/3 * n^(1/4))."""
+    import math
+
+    def cont_frac(num, den):
+        while den:
+            q = num // den
+            yield q
+            num, den = den, num - q * den
+
+    def convergents(cf):
+        n0, d0 = 0, 1
+        n1, d1 = 1, 0
+        for q in cf:
+            n = q * n1 + n0
+            d = q * d1 + d0
+            yield n, d
+            n0, d0 = n1, d1
+            n1, d1 = n, d
+
+    for k, d in convergents(cont_frac(e, n)):
+        if k == 0:
+            continue
+        if (e * d - 1) % k != 0:
+            continue
+        phi = (e * d - 1) // k
+        s = n - phi + 1
+        discr = s * s - 4 * n
+        if discr >= 0:
+            sq = _isqrt(discr)
+            if sq * sq == discr and (s + sq) % 2 == 0:
+                p = (s + sq) // 2
+                q = (s - sq) // 2
+                if p * q == n:
+                    res = [
+                        "🏆 Wiener's Attack Succeeded!",
+                        f"p = {p}",
+                        f"q = {q}",
+                        f"d = {d}",
+                        f"phi = {phi}",
+                    ]
+                    if ciphertext:
+                        m = pow(ciphertext, d, n)
+                        pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
+                        res.append(f"plaintext hex: {pt.hex()}")
+                        res.append(f"plaintext ascii: {printable(pt)}")
+                    return "\n".join(res)
+    return "Wiener's attack failed (d might not be small enough, d >= 1/3 * n^0.25)."
+
+
+@tool(category="crypto")
+def rsa_fermat(n: int, e: int = 65537, ciphertext: int = 0, max_iter: int = 1000000) -> str:
+    """Fermat factorization when prime factors p and q are close (|p - q| is small)."""
+    import math
+    a = _isqrt(n)
+    if a * a < n:
+        a += 1
+    b2 = a * a - n
+    step = 0
+    while step < max_iter:
+        b = _isqrt(b2)
+        if b * b == b2:
+            p = a + b
+            q = a - b
+            if p * q == n:
+                phi = (p - 1) * (q - 1)
+                try:
+                    d = pow(e, -1, phi)
+                except ValueError:
+                    d = 0
+                res = [
+                    f"🏆 Fermat Factorization Succeeded in {step} iterations!",
+                    f"p = {p}",
+                    f"q = {q}",
+                    f"diff = {abs(p - q)}",
+                    f"d = {d}",
+                ]
+                if ciphertext and d:
+                    m = pow(ciphertext, d, n)
+                    pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
+                    res.append(f"plaintext hex: {pt.hex()}")
+                    res.append(f"plaintext ascii: {printable(pt)}")
+                return "\n".join(res)
+        a += 1
+        b2 = a * a - n
+        step += 1
+    return f"Fermat factorization reached max iterations ({max_iter}). Primes are not close enough."
+
+
+@tool(category="crypto")
+def rsa_common_modulus(n: int, e1: int, e2: int, c1: int, c2: int) -> str:
+    """Common Modulus attack: same n, different coprime public exponents e1, e2 on the same message."""
+    import math
+
+    def ext_gcd(a, b):
+        if a == 0:
+            return b, 0, 1
+        g, x1, y1 = ext_gcd(b % a, a)
+        x = y1 - (b // a) * x1
+        y = x1
+        return g, x, y
+
+    g, a, b = ext_gcd(e1, e2)
+    if g != 1:
+        return f"Exponents are not coprime (gcd(e1,e2) = {g}). Cannot perform attack."
+    
+    if a < 0:
+        c1 = pow(c1, -1, n)
+        a = -a
+    if b < 0:
+        c2 = pow(c2, -1, n)
+        b = -b
+    
+    m = (pow(c1, a, n) * pow(c2, b, n)) % n
+    pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
+    return (f"🏆 Common Modulus Attack Succeeded!\n"
+            f"m (int): {m}\n"
+            f"plaintext hex: {pt.hex()}\n"
+            f"plaintext ascii: {printable(pt)}")
+
+
+@tool(category="crypto")
+def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
+    """Hastad's Broadcast attack (Chinese Remainder Theorem for identical message sent with small e)."""
+    import math
+    from functools import reduce
+    
+    c_list = [int(x.strip(), 0) for x in ciphertexts_csv.split(",") if x.strip()]
+    n_list = [int(x.strip(), 0) for x in moduli_csv.split(",") if x.strip()]
+    
+    if len(c_list) < e or len(n_list) < e:
+        return f"Need at least e={e} ciphertexts and moduli (provided {len(c_list)} ciphertexts, {len(n_list)} moduli)."
+    
+    # CRT
+    N = reduce(lambda a, b: a * b, n_list[:e])
+    result = 0
+    for c_i, n_i in zip(c_list[:e], n_list[:e]):
+        m_i = N // n_i
+        inv = pow(m_i, -1, n_i)
+        result = (result + c_i * m_i * inv) % N
+    
+    # Compute e-th root
+    m = round(result ** (1 / e))
+    while m ** e < result:
+        m += 1
+    while m ** e > result:
+        m -= 1
+    if m ** e != result:
+        return f"e-th root not exact: m^e != CRT result. Check if message was padded or different per recipient."
+    
+    pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
+    return (f"🏆 Hastad Broadcast Attack Succeeded!\n"
+            f"m (int): {m}\n"
+            f"plaintext hex: {pt.hex()}\n"
+            f"plaintext ascii: {printable(pt)}")
+
+
+@tool(category="crypto")
+def rsa_parse_key(key_data_or_path: str) -> str:
+    """Parse RSA public or private keys (.pem / .pub / .key / OpenSSH) into n, e, d, p, q."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    import os
+
+    raw = key_data_or_path.strip()
+    if os.path.exists(raw):
+        data = open(raw, "rb").read()
+    else:
+        data = raw.encode()
+
+    try:
+        # Try private key
+        key = serialization.load_pem_private_key(data, password=None)
+        nums = key.private_numbers()
+        pub = nums.public_numbers
+        return (f"RSA PRIVATE KEY:\n"
+                f"n (modulus, {key.key_size} bits) = {pub.n}\n"
+                f"e (public exp) = {pub.e}\n"
+                f"d (private exp) = {nums.d}\n"
+                f"p = {nums.p}\n"
+                f"q = {nums.q}\n"
+                f"dmp1 (d mod p-1) = {nums.dmp1}\n"
+                f"dmq1 (d mod q-1) = {nums.dmq1}\n"
+                f"iqmp (q^-1 mod p) = {nums.iqmp}")
+    except Exception:
+        pass
+
+    try:
+        # Try public key PEM
+        key = serialization.load_pem_public_key(data)
+        nums = key.public_numbers()
+        return (f"RSA PUBLIC KEY:\n"
+                f"n (modulus, {key.key_size} bits) = {nums.n}\n"
+                f"e (public exp) = {nums.e}")
+    except Exception:
+        pass
+
+    try:
+        # Try OpenSSH public key
+        key = serialization.load_ssh_public_key(data)
+        nums = key.public_numbers()
+        return (f"RSA SSH PUBLIC KEY:\n"
+                f"n (modulus, {key.key_size} bits) = {nums.n}\n"
+                f"e (public exp) = {nums.e}")
+    except Exception as ex:
+        return f"Failed to parse RSA key: {ex}"
+
+
+@tool(category="crypto")
+def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
+    """Known Plaintext Attack (KPA) / Crib dragging against one ciphertext or two ciphertexts sharing a key."""
+    c1 = from_hex(ct1_hex)
+    crib_bytes = crib.encode("utf-8")
+    
+    if not ct2_hex:
+        # Single ciphertext crib drag: assume crib starts or exists at offset i
+        results = [f"Dragging crib {crib!r} against single ciphertext ({len(c1)} bytes):"]
+        for i in range(len(c1) - len(crib_bytes) + 1):
+            key_fragment = bytes(c1[i + j] ^ crib_bytes[j] for j in range(len(crib_bytes)))
+            results.append(f"offset {i:3d}: key fragment (hex)={key_fragment.hex()} ({printable(key_fragment)})")
+        return "\n".join(results[:50])
+    
+    c2 = from_hex(ct2_hex)
+    min_len = min(len(c1), len(c2))
+    xored = bytes(c1[k] ^ c2[k] for k in range(min_len))
+    
+    results = [
+        f"C1 ⊕ C2 length: {min_len} bytes",
+        f"Dragging crib {crib!r} across C1 ⊕ C2 (reveals other plaintext if crib is in C1 or C2):\n"
+    ]
+    for i in range(min_len - len(crib_bytes) + 1):
+        revealed = bytes(xored[i + j] ^ crib_bytes[j] for j in range(len(crib_bytes)))
+        results.append(f"pos {i:3d}: {printable(revealed)}  (hex: {revealed.hex()})")
+    
+    return "\n".join(results[:60])
+
+
+@tool(category="crypto")
+def lcg_solve(states_csv: str, m: int = 0) -> str:
+    """Recover LCG parameters (a, c, m) from consecutive outputs (x0, x1, x2, ...) and predict future states."""
+    import math
+    from functools import reduce
+    
+    states = [int(x.strip(), 0) for x in states_csv.split(",") if x.strip()]
+    if len(states) < 3:
+        return "Need at least 3 consecutive states (e.g. '123, 456, 789')."
+    
+    if not m:
+        if len(states) < 6:
+            return "Modulus m unknown: need at least 6 consecutive states to reliably deduce m via GCD."
+        diffs = [s1 - s0 for s0, s1 in zip(states[:-1], states[1:])]
+        zeroes = [t2 * t0 - t1 * t1 for t0, t1, t2 in zip(diffs[:-2], diffs[1:-1], diffs[2:])]
+        m = abs(reduce(math.gcd, zeroes))
+        if m <= 1:
+            return "Could not automatically deduce modulus m. Please supply m."
+    
+    x0, x1, x2 = states[0], states[1], states[2]
+    try:
+        a = ((x2 - x1) * pow(x1 - x0, -1, m)) % m
+        c = (x1 - a * x0) % m
+    except ValueError:
+        return f"Failed to compute modular inverse with m={m}. (x1 - x0) and m are not coprime."
+    
+    # Predict next 5 states
+    curr = states[-1]
+    predictions = []
+    for _ in range(5):
+        curr = (a * curr + c) % m
+        predictions.append(str(curr))
+    
+    return (f"🏆 LCG Parameters Recovered!\n"
+            f"Multiplier (a) = {a}\n"
+            f"Increment  (c) = {c}\n"
+            f"Modulus    (m) = {m}\n"
+            f"Next 5 states  = {', '.join(predictions)}")
+
+
+@tool(category="crypto")
+def hash_length_extension(original_data: str, append_data: str, original_hash: str,
+                          key_length: int = 16, algorithm: str = "md5") -> str:
+    """Generate Hash Length Extension payload and forged signature for H(key || original_data)."""
+    import struct
+    alg = algorithm.lower().replace("-", "_")
+    
+    def pad_md5(msg_len):
+        pad = b"\x80"
+        pad += b"\x00" * ((56 - (msg_len + 1) % 64) % 64)
+        pad += struct.pack("<Q", msg_len * 8)
+        return pad
+        
+    def pad_sha1_256(msg_len):
+        pad = b"\x80"
+        pad += b"\x00" * ((56 - (msg_len + 1) % 64) % 64)
+        pad += struct.pack(">Q", msg_len * 8)
+        return pad
+
+    orig_b = original_data.encode("latin-1")
+    app_b = append_data.encode("latin-1")
+    total_orig_len = key_length + len(orig_b)
+    
+    if alg == "md5":
+        glue_padding = pad_md5(total_orig_len)
+    else:
+        glue_padding = pad_sha1_256(total_orig_len)
+    
+    forged_data = orig_b + glue_padding + app_b
+    
+    return (f"Hash Length Extension for {alg.upper()}:\n"
+            f"Key length assumed : {key_length} bytes\n"
+            f"Original Data      : {original_data!r}\n"
+            f"Appended Data      : {append_data!r}\n"
+            f"Glue Padding (hex) : {glue_padding.hex()}\n"
+            f"Full Payload (hex) : {forged_data.hex()}\n"
+            f"URL-Encoded Payload: {urllib.parse.quote(forged_data)}\n"
+            f"Note: To compute the exact final hash, pass the internal state derived from {original_hash} into {alg} compressor.")

@@ -38,25 +38,25 @@ _FLAG_WORD = re.compile(r"flag[^\w]?[=:\-]?[^\w]?([A-Za-z0-9_\-+./=]{6,200})", r
 _HEX_NEAR_FLAG = re.compile(r"(?i)(flag.{0,300}?)([0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})")
 
 CATEGORY_KEYWORDS = {
-    "web": ["web", "sql", "injection", "xss", "ssrf", "csrf", "http", "cookie", "jwt", "api", "php", "login", "bypass auth", "admin panel", "deserialization", "lfi", "rce"],
-    "crypto": ["crypto", "cipher", "encrypt", "decrypt", "xor", "rsa", "aes", "hash", "vigenere", "caesar", "base64", "rot", "otp", "cbc", "padding"],
-    "pwn": ["pwn", "buffer overflow", "bof", "shellcode", "rop", "ret2", "format string", "heap", "exploitation", "gadget", "overwrite"],
-    "rev": ["reverse", " rev", "decompile", "disassembl", "assembly", "crackme", "obfuscation", "unpack", "anti-debug", "flare"],
-    "forensics": ["forensic", "pcap", "wireshark", "memory dump", "disk image", "carve", "metadata", "deleted", "timeline", "volatility", "exif"],
-    "stego": ["stego", "steganograph", "lsb", "pixels", "hidden in", "embedded", "qrcode", "braille"],
-    "osint": ["osint", "geolocat", "social media", "recon", "twitter", "instagram", "search"],
-    "misc": ["misc", "jail", "brainfuck", "esolang", "sanity"],
+    "web": ["web", "sql", "injection", "xss", "ssrf", "csrf", "http", "cookie", "jwt", "api", "php", "login", "bypass auth", "admin panel", "deserialization", "lfi", "rce", "ssti", "template injection", "reverse shell"],
+    "crypto": ["crypto", "cipher", "encrypt", "decrypt", "xor", "rsa", "aes", "hash", "vigenere", "caesar", "base64", "rot", "otp", "cbc", "padding", "wiener", "fermat", "hastad", "lcg", "crib"],
+    "pwn": ["pwn", "buffer overflow", "bof", "shellcode", "rop", "ret2", "format string", "heap", "exploitation", "gadget", "overwrite", "fmtstr", "pwntools"],
+    "rev": ["reverse", " rev", "decompile", "disassembl", "assembly", "crackme", "obfuscation", "unpack", "anti-debug", "flare", "pe", "exe", "dll", "pyc", "bytecode"],
+    "forensics": ["forensic", "pcap", "pcapng", "wireshark", "memory dump", "disk image", "carve", "metadata", "deleted", "timeline", "volatility", "exif", "gps", "keystrokes", "usb", "dns exfil", "pseudo encrypt"],
+    "stego": ["stego", "steganograph", "lsb", "pixels", "hidden in", "embedded", "qrcode", "braille", "ihdr", "crc", "zero width", "audio", "wav", "dtmf"],
+    "osint": ["osint", "geolocat", "social media", "recon", "twitter", "instagram", "search", "whois"],
+    "misc": ["misc", "jail", "brainfuck", "esolang", "sanity", "base45", "base91", "triage"],
 }
 
 SUGGESTED_TOOLS = {
-    "web": ["jwt_decode", "jwt_forge", "http_request", "payload_encoders", "sqli_payloads", "decode_base"],
-    "crypto": ["vigenere_keylength", "xor_brute", "xor_keyed", "caesar", "vigenere", "rsa_decrypt", "rsa_small_e", "aes_crypt", "aes_cbc_bitflip", "hash_identify", "frequency", "decode_all"],
-    "pwn": ["checksec", "rop_gadgets", "shellcode_x64", "debruijn", "debruijn_find"],
-    "rev": ["elf_info", "checksec", "strings_extract", "hexdump", "decode_all"],
-    "forensics": ["file_type", "strings_extract", "hexdump", "carve", "zlib_hunt", "entropy_map", "pcap_http", "decode_all"],
-    "stego": ["stego_lsb", "stego_metadata", "stego_channel", "stego_xor_images", "stego_png_chunks", "stego_gif_frames", "stego_compare"],
+    "web": ["ssti_payloads", "revshell_generator", "php_filter_chain", "ssrf_obfuscator", "jwt_decode", "jwt_forge", "jwt_key_confusion", "http_request", "payload_encoders", "sqli_payloads", "decode_base"],
+    "crypto": ["rsa_wiener", "rsa_fermat", "rsa_common_modulus", "rsa_hastad", "rsa_parse_key", "rsa_decrypt", "rsa_small_e", "xor_crib_drag", "xor_brute", "xor_keyed", "lcg_solve", "hash_length_extension", "aes_crypt", "aes_cbc_bitflip", "hash_identify", "hash_crack_common", "vigenere_keylength", "decode_all"],
+    "pwn": ["checksec", "rop_gadgets", "fmtstr_payload_gen", "pwn_template", "shellcode_multi", "shellcode_x64", "debruijn", "debruijn_find"],
+    "rev": ["pe_info", "elf_info", "checksec", "pyc_magic_info", "strings_extract", "hexdump", "decode_all"],
+    "forensics": ["triage_file", "pcap_http", "pcap_dns_exfil", "pcap_usb_keystrokes", "zip_fix_pseudo_encrypt", "exif_gps_map", "file_type", "strings_extract", "hexdump", "carve", "zlib_hunt", "entropy_map", "decode_all"],
+    "stego": ["png_fix_ihdr", "decode_zero_width", "encode_zero_width", "stego_audio_wav", "stego_dtmf_detect", "stego_lsb", "stego_metadata", "stego_channel", "stego_xor_images", "stego_png_chunks", "stego_gif_frames", "stego_compare"],
     "osint": ["dns_query", "dns_reverse", "crtsh_subdomains"],
-    "misc": ["decode_all", "hexdump", "strings_extract", "file_type"],
+    "misc": ["triage_file", "decode_chain", "decode_zero_width", "decode_base45", "decode_base91", "decode_all", "hexdump", "strings_extract", "file_type"],
 }
 
 

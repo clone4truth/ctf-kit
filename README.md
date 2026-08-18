@@ -42,7 +42,7 @@ python -m venv .venv
 
 ## Use in opencode
 
-`opencode.json` registers `ctf-tools` as an MCP server (57 tools). Restart
+`opencode.json` registers `ctf-tools` as an MCP server (90 tools). Restart
 opencode after changing the config, and launch opencode from this folder so
 the project config is picked up.
 
@@ -50,14 +50,15 @@ the project config is picked up.
 
 | Category | Tools |
 |---|---|
-| **encoding** (7) | decode_base (2/8/16/32/36/58/62/64/85), encode_url, html entities, unicode escapes, morse, brainfuck, decode_all (auto-try everything) |
-| **crypto** (22) | caesar (brute+scoring), atbash, affine, vigenere, beaufort, playfair, hill 2x2, railfence, columnar, bacon, rot47, frequency+bigram, vigenere_keylength (IC/Kasiski), xor_brute (multi-key), xor_keyed, rsa_decrypt (factoring + auto padding), rsa_small_e, aes_crypt (ECB/CBC/CFB/OFB/CTR/GCM + auto PKCS7), aes_cbc_bitflip, hash_identify, hash_generate, hash_crack_common |
-| **stego** (7) | stego_lsb (lsb/msb, channel, bit order), stego_metadata (tEXt/EXIF), stego_channel, stego_xor_images, stego_png_chunks, stego_gif_frames, stego_compare |
-| **forensics** (7) | file_type (magic+entropy), strings_extract (ascii/utf16), hexdump, carve (15+ magics), zlib_hunt, entropy_map, pcap_http |
-| **web** (5) | jwt_decode, jwt_forge (none/HS256), http_request (GET/POST/HEAD, custom headers), payload_encoders (WAF-bypass variants), sqli_payloads |
-| **rev** (1) | elf_info (class/machine/entry/phdr/shdr) |
-| **pwn** (5) | checksec (NX/PIE/RELRO/Canary/Fortify), rop_gadgets (x86-64), shellcode_x64 (null-free execve + xor decoder), debruijn, debruijn_find |
+| **encoding** (12) | decode_base (2/8/16/32/36/58/62/64/85), decode_base45, decode_base91, decode_chain (auto-unpacker), decode_zero_width, encode_zero_width, encode_url, html entities, unicode escapes, morse, brainfuck, decode_all |
+| **crypto** (30) | rsa_wiener, rsa_fermat, rsa_common_modulus, rsa_hastad, rsa_parse_key, rsa_decrypt, rsa_small_e, xor_crib_drag, xor_brute, xor_keyed, lcg_solve, hash_length_extension, caesar, atbash, affine, vigenere, beaufort, playfair, hill 2x2, railfence, columnar, bacon, rot47, frequency+bigram, vigenere_keylength, aes_crypt, aes_cbc_bitflip, hash_identify, hash_generate, hash_crack_common |
+| **stego** (10) | png_fix_ihdr (CRC dimension recovery), stego_audio_wav (LSB), stego_dtmf_detect, stego_lsb, stego_metadata, stego_channel, stego_xor_images, stego_png_chunks, stego_gif_frames, stego_compare |
+| **forensics** (11) | triage_file, pcap_http (PCAP & PCAPNG), pcap_dns_exfil, pcap_usb_keystrokes, zip_fix_pseudo_encrypt, exif_gps_map, file_type, strings_extract, hexdump, carve (15+ magics), zlib_hunt, entropy_map |
+| **web** (10) | ssti_payloads (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), revshell_generator (multi-language & bypasses), php_filter_chain, ssrf_obfuscator, jwt_key_confusion (CVE-2015-9235), jwt_decode, jwt_forge, http_request, payload_encoders, sqli_payloads |
+| **rev** (3) | pe_info (Windows PE32/PE32+ mitigations), elf_info (Linux ELF), pyc_magic_info |
+| **pwn** (9) | checksec, rop_gadgets, fmtstr_payload_gen, pwn_template (pwntools), shellcode_multi (x86/x64/ARM/Win), shellcode_x64, debruijn, debruijn_find |
 | **osint** (3) | dns_query (A/AAAA/MX/NS/TXT/CNAME), dns_reverse, crtsh_subdomains |
+| **misc** (2) | detect_challenge, extract_flags_tool |
 
 ## Architecture
 

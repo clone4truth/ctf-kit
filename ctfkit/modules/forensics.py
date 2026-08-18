@@ -143,37 +143,77 @@ def entropy_map(file_path: str, block_size: int = 4096) -> str:
     return f"entropy per {block_size} bytes:\n" + "\n".join(lines)
 
 
+def _iter_packets(data: bytes):
+    """Universal packet iterator supporting both classic PCAP and modern PCAPNG formats."""
+    if data[:4] in (b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4"):
+        # Classic PCAP
+        le = data[:4] == b"\xd4\xc3\xb2\xa1"
+        link_type = struct.unpack("<I" if le else ">I", data[20:24])[0]
+        pos = 24
+        while pos + 16 <= len(data):
+            if le:
+                ts_sec, ts_usec, incl, orig = struct.unpack("<IIII", data[pos:pos + 16])
+            else:
+                ts_sec, ts_usec, incl, orig = struct.unpack(">IIII", data[pos:pos + 16])
+            pos += 16
+            if pos + incl > len(data):
+                break
+            pkt = data[pos:pos + incl]
+            pos += incl
+            yield link_type, pkt
+    elif data[:4] == b"\x0a\x0d\x0d\x0a":
+        # PCAPNG format
+        pos = 0
+        link_type = 1  # default Ethernet
+        le = True
+        while pos + 8 <= len(data):
+            block_type = int.from_bytes(data[pos:pos + 4], "little" if le else "big")
+            block_len = int.from_bytes(data[pos + 4:pos + 8], "little" if le else "big")
+            if block_len < 12 or pos + block_len > len(data):
+                break
+            body = data[pos + 8:pos + block_len - 4]
+            if block_type == 0x0A0D0D0A:  # Section Header Block
+                if len(body) >= 4:
+                    magic = body[:4]
+                    if magic == b"\x1a\x2b\x3c\x4d":
+                        le = True
+                    elif magic == b"\x4d\x3c\x2b\x1a":
+                        le = False
+            elif block_type == 0x00000001:  # Interface Description Block
+                if len(body) >= 2:
+                    link_type = int.from_bytes(body[:2], "little" if le else "big")
+            elif block_type == 0x00000006:  # Enhanced Packet Block
+                if len(body) >= 20:
+                    caplen = int.from_bytes(body[12:16], "little" if le else "big")
+                    pkt_data = body[20:20 + caplen]
+                    yield link_type, pkt_data
+            elif block_type == 0x00000003:  # Simple Packet Block
+                if len(body) >= 4:
+                    caplen = int.from_bytes(body[:4], "little" if le else "big")
+                    pkt_data = body[4:4 + caplen]
+                    yield link_type, pkt_data
+            pos += block_len
+
+
 @tool(category="forensics")
 def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
-    """Parse a minimal PCAP (Ethernet/IP/TCP) and extract HTTP payloads + printable text per TCP flow."""
+    """Parse PCAP / PCAPNG files and extract HTTP payloads & printable text per TCP stream."""
     data = open(pcap_path, "rb").read()
-    if data[:4] not in (b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4"):
-        return "Not a pcap (bad magic)."
-    le = data[:4] == b"\xd4\xc3\xb2\xa1"
-    link_type = struct.unpack("<I" if le else ">I", data[20:24])[0]
-    pos = 24
     flows = {}
     n_packets = 0
-    while pos + 16 <= len(data):
-        if le:
-            ts_sec, ts_usec, incl, orig = struct.unpack("<IIII", data[pos:pos + 16])
-        else:
-            ts_sec, ts_usec, incl, orig = struct.unpack(">IIII", data[pos:pos + 16])
-        pos += 16
-        if pos + incl > len(data):
-            break
-        pkt = data[pos:pos + incl]
-        pos += incl
+    
+    for link_type, pkt in _iter_packets(data):
         n_packets += 1
         if link_type == 1:  # Ethernet
             if len(pkt) < 14:
                 continue
             eth_type = int.from_bytes(pkt[12:14], "big")
             pkt = pkt[14:]
-        elif link_type == 101:  # raw IP
+        elif link_type in (101, 12):  # Raw IP
             eth_type = 0x0800
         else:
             continue
+            
         if eth_type != 0x0800 or len(pkt) < 20:
             continue
         ihl = (pkt[0] & 0x0F) * 4
@@ -182,18 +222,246 @@ def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
             continue
         sport = int.from_bytes(pkt[ihl:ihl + 2], "big")
         dport = int.from_bytes(pkt[ihl + 2:ihl + 4], "big")
-        payload = pkt[ihl + 20:]
+        tcp_off = ((pkt[ihl + 12] >> 4) & 0x0F) * 4
+        payload = pkt[ihl + tcp_off:]
         if not payload:
             continue
         flow = (sport, dport) if sport < dport else (dport, sport)
         flows.setdefault(flow, []).append(payload)
-    out = [f"{n_packets} packets read, {len(flows)} TCP flows"]
+        
+    if not n_packets:
+        return "Could not read any packets from file (unsupported format or empty capture)."
+        
+    out = [f"{n_packets} packets read, {len(flows)} TCP flows found"]
     for (sa, da), chunks in list(flows.items())[:max_flows]:
         blob = b"".join(chunks)
-        out.append(f"\n=== flow {sa}<->{da} ({len(blob)} bytes payload) ===")
-        if b"HTTP" in blob[:2048]:
+        out.append(f"\n=== Flow {sa} <-> {da} ({len(blob)} bytes payload) ===")
+        if b"HTTP" in blob[:2048] or b"GET " in blob[:2048] or b"POST " in blob[:2048]:
             head = blob[:2048].decode("latin-1", "replace")
-            out.append("HTTP detected:\n" + head[:1000])
+            out.append("HTTP Detected:\n" + head[:800])
         else:
             out.append(printable(blob, 400))
     return "\n".join(out)
+
+
+@tool(category="forensics")
+def pcap_dns_exfil(pcap_path: str) -> str:
+    """Extract DNS query subdomains from PCAP/PCAPNG to recover exfiltrated flags or data."""
+    data = open(pcap_path, "rb").read()
+    queries = []
+    
+    for link_type, pkt in _iter_packets(data):
+        if link_type == 1:
+            if len(pkt) < 14:
+                continue
+            eth_type = int.from_bytes(pkt[12:14], "big")
+            pkt = pkt[14:]
+        elif link_type in (101, 12):
+            eth_type = 0x0800
+        else:
+            continue
+            
+        if eth_type != 0x0800 or len(pkt) < 28:
+            continue
+        ihl = (pkt[0] & 0x0F) * 4
+        proto = pkt[9]
+        if proto != 17 or len(pkt) < ihl + 8:  # UDP
+            continue
+            
+        sport = int.from_bytes(pkt[ihl:ihl + 2], "big")
+        dport = int.from_bytes(pkt[ihl + 2:ihl + 4], "big")
+        if dport != 53 and sport != 53:
+            continue
+            
+        udp_payload = pkt[ihl + 8:]
+        if len(udp_payload) < 12:
+            continue
+            
+        # Parse DNS Question
+        pos = 12
+        domain_parts = []
+        while pos < len(udp_payload):
+            length = udp_payload[pos]
+            if length == 0:
+                break
+            pos += 1
+            if pos + length > len(udp_payload):
+                break
+            part = udp_payload[pos:pos + length].decode("latin-1", "replace")
+            domain_parts.append(part)
+            pos += length
+            
+        if domain_parts:
+            full_domain = ".".join(domain_parts)
+            if full_domain not in queries:
+                queries.append(full_domain)
+                
+    if not queries:
+        return "No DNS queries found in PCAP."
+        
+    out = [f"Found {len(queries)} unique DNS queries:\n"]
+    out.extend(f"  {q}" for q in queries[:40])
+    if len(queries) > 40:
+        out.append(f"  ... ({len(queries) - 40} more queries)")
+        
+    # Attempt extraction of hex or base64 subdomains
+    subdomains = [q.split(".")[0] for q in queries]
+    joined_hex = "".join(s for s in subdomains if re.fullmatch(r"[0-9a-fA-F]+", s))
+    if len(joined_hex) >= 8 and len(joined_hex) % 2 == 0:
+        try:
+            raw = bytes.fromhex(joined_hex)
+            out.append(f"\n🏆 Decoded Hex Exfiltration ({len(raw)} bytes):\n{printable(raw, 500)}")
+        except Exception:
+            pass
+            
+    return "\n".join(out)
+
+
+_USB_HID_KEYS = {
+    0x04: ('a', 'A'), 0x05: ('b', 'B'), 0x06: ('c', 'C'), 0x07: ('d', 'D'),
+    0x08: ('e', 'E'), 0x09: ('f', 'F'), 0x0a: ('g', 'G'), 0x0b: ('h', 'H'),
+    0x0c: ('i', 'I'), 0x0d: ('j', 'J'), 0x0e: ('k', 'K'), 0x0f: ('l', 'L'),
+    0x10: ('m', 'M'), 0x11: ('n', 'N'), 0x12: ('o', 'O'), 0x13: ('p', 'P'),
+    0x14: ('q', 'Q'), 0x15: ('r', 'R'), 0x16: ('s', 'S'), 0x17: ('t', 'T'),
+    0x18: ('u', 'U'), 0x19: ('v', 'V'), 0x1a: ('w', 'W'), 0x1b: ('x', 'X'),
+    0x1c: ('y', 'Y'), 0x1d: ('z', 'Z'), 0x1e: ('1', '!'), 0x1f: ('2', '@'),
+    0x20: ('3', '#'), 0x21: ('4', '$'), 0x22: ('5', '%'), 0x23: ('6', '^'),
+    0x24: ('7', '&'), 0x25: ('8', '*'), 0x26: ('9', '('), 0x27: ('0', ')'),
+    0x28: ('\n', '\n'), 0x2a: ('[BACKSPACE]', '[BACKSPACE]'), 0x2c: (' ', ' '),
+    0x2d: ('-', '_'), 0x2e: ('=', '+'), 0x2f: ('[', '{'), 0x30: (']', '}'),
+    0x31: ('\\', '|'), 0x33: (';', ':'), 0x34: ("'", '"'), 0x36: (',', '<'),
+    0x37: ('.', '>'), 0x38: ('/', '?'),
+}
+
+
+@tool(category="forensics")
+def pcap_usb_keystrokes(pcap_path: str) -> str:
+    """Parse USB HID keyboard packets in PCAP/PCAPNG to reconstruct typed text and flags."""
+    data = open(pcap_path, "rb").read()
+    typed = []
+    
+    for link_type, pkt in _iter_packets(data):
+        # Look for 8-byte HID keyboard report: [modifier, reserved, key1, key2, ...]
+        hid_data = None
+        if len(pkt) == 8:
+            hid_data = pkt
+        elif len(pkt) >= 8 and (b"\x00\x00" in pkt or len(pkt) in (27, 35, 64)):
+            # USB header offset extraction
+            hid_data = pkt[-8:]
+            
+        if not hid_data or len(hid_data) != 8:
+            continue
+            
+        mod = hid_data[0]
+        shift = bool(mod & 0x22)
+        keycode = hid_data[2]
+        
+        if keycode in _USB_HID_KEYS:
+            char = _USB_HID_KEYS[keycode][1 if shift else 0]
+            if char == '[BACKSPACE]':
+                if typed:
+                    typed.pop()
+            else:
+                typed.append(char)
+                
+    result = "".join(typed)
+    return (f"🏆 Reconstructed USB Keystrokes ({len(typed)} characters):\n"
+            f"----------------------------------------\n"
+            f"{result or 'No USB keyboard HID keystrokes identified.'}\n"
+            f"----------------------------------------")
+
+
+@tool(category="forensics")
+def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
+    """Detect and fix pseudo-encrypted ZIP archives (clears the fake encryption bit 0x0001)."""
+    data = bytearray(open(zip_path, "rb").read())
+    fixed_count = 0
+    
+    # Check Local File Headers (PK\x03\x04)
+    pos = 0
+    while True:
+        pos = data.find(b"PK\x03\x04", pos)
+        if pos == -1 or pos + 8 > len(data):
+            break
+        flags = int.from_bytes(data[pos + 6:pos + 8], "little")
+        if flags & 0x0001:
+            data[pos + 6] &= 0xFE  # clear bit 0
+            fixed_count += 1
+        pos += 4
+        
+    # Check Central Directory Headers (PK\x01\x02)
+    pos = 0
+    while True:
+        pos = data.find(b"PK\x01\x02", pos)
+        if pos == -1 or pos + 10 > len(data):
+            break
+        flags = int.from_bytes(data[pos + 8:pos + 10], "little")
+        if flags & 0x0001:
+            data[pos + 8] &= 0xFE  # clear bit 0
+            fixed_count += 1
+        pos += 4
+        
+    if fixed_count == 0:
+        return "No pseudo-encryption flags found in ZIP archive (headers appear normal)."
+        
+    dest = out_path or (os.path.splitext(zip_path)[0] + "_unlocked.zip")
+    with open(dest, "wb") as f:
+        f.write(data)
+        
+    return (f"🏆 Successfully fixed {fixed_count} pseudo-encryption flags in ZIP!\n"
+            f"Unlocked archive saved to: {dest}\n"
+            f"You can now extract {dest} without a password prompt.")
+
+
+@tool(category="forensics")
+def exif_gps_map(image_path: str) -> str:
+    """Extract EXIF GPS coordinates from an image and generate decimal Lat/Long and Maps links."""
+    from PIL import Image, ExifTags
+    try:
+        img = Image.open(image_path)
+        exif = img._getexif()
+        if not exif:
+            return "No EXIF metadata found in image."
+    except Exception as ex:
+        return f"Failed to read image EXIF: {ex}"
+        
+    gps_info = None
+    for tag_id, val in exif.items():
+        if ExifTags.TAGS.get(tag_id) == "GPSInfo":
+            gps_info = val
+            break
+            
+    if not gps_info:
+        return "No GPSInfo tag found in EXIF metadata."
+        
+    def to_deg(val):
+        if not val:
+            return 0.0
+        d, m, s = val[0], val[1], val[2]
+        d_val = d[0] / d[1] if isinstance(d, tuple) else float(d)
+        m_val = m[0] / m[1] if isinstance(m, tuple) else float(m)
+        s_val = s[0] / s[1] if isinstance(s, tuple) else float(s)
+        return d_val + (m_val / 60.0) + (s_val / 3600.0)
+        
+    lat_ref = gps_info.get(1, "N")
+    lat_val = to_deg(gps_info.get(2))
+    if lat_ref == "S":
+        lat_val = -lat_val
+        
+    lon_ref = gps_info.get(3, "E")
+    lon_val = to_deg(gps_info.get(4))
+    if lon_ref == "W":
+        lon_val = -lon_val
+        
+    alt = gps_info.get(6, 0)
+    alt_val = alt[0] / alt[1] if isinstance(alt, tuple) else float(alt)
+    
+    gmaps_url = f"https://www.google.com/maps?q={lat_val:.6f},{lon_val:.6f}"
+    osm_url = f"https://www.openstreetmap.org/?mlat={lat_val:.6f}&mlon={lon_val:.6f}#map=16/{lat_val:.6f}/{lon_val:.6f}"
+    
+    return (f"📍 EXIF GPS Coordinates Located:\n"
+            f"Latitude  : {lat_val:.6f}° ({lat_ref})\n"
+            f"Longitude : {lon_val:.6f}° ({lon_ref})\n"
+            f"Altitude  : {alt_val:.2f} m\n\n"
+            f"Google Maps : {gmaps_url}\n"
+            f"OpenStreetMap: {osm_url}")

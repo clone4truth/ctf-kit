@@ -3,6 +3,9 @@ import asyncio
 import json
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 REQS = [
     {"jsonrpc": "2.0", "id": 1, "method": "initialize",
      "params": {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -35,7 +38,16 @@ async def main():
         proc.stdin.write((json.dumps(r) + "\n").encode())
     await proc.stdin.drain()
     await asyncio.wait_for(collect(), 30)
-    proc.kill()
+    try:
+        proc.stdin.close()
+        await proc.stdin.wait_closed()
+    except Exception:
+        pass
+    try:
+        proc.terminate()
+        await proc.wait()
+    except Exception:
+        proc.kill()
 
     by_id = {r["id"]: r for r in lines if "id" in r}
     assert by_id.get(1, {}).get("result", {}).get("protocolVersion"), "initialize gagal"
@@ -46,8 +58,8 @@ async def main():
     for tid in (3, 4):
         res = by_id[tid]["result"]
         print(f"call {REQS[tid-1]['params']['name']}: {res['content'][0]['text'][:60]!r}")
-    assert len(tools) == 57, f"harus 57 tool, dapat {len(tools)}"
-    print("MCP HAND SHAKE OK")
+    assert len(tools) >= 90, f"harus minimal 90 tool, dapat {len(tools)}"
+    print(f"MCP HANDSHAKE OK — All {len(tools)} tools exposed properly")
 
 
 asyncio.run(main())

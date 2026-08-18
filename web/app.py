@@ -8,7 +8,7 @@ import json
 import os
 import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -43,6 +43,21 @@ def tools_list() -> dict:
     for t in items:
         categories.setdefault(t["category"], {"label": t["category_label"], "tools": []})["tools"].append(t)
     return {"categories": categories, "total": len(items)}
+
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)) -> dict:
+    """Handle file upload and return local path for tool inputs."""
+    upload_dir = os.path.join(os.path.dirname(__file__), "..", "testdata", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    clean_name = os.path.basename(file.filename or "upload.bin")
+    file_path = os.path.join(upload_dir, clean_name)
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    rel_path = f"testdata/uploads/{clean_name}"
+    log.info("File uploaded: %s (%d bytes)", rel_path, len(content))
+    return {"ok": True, "path": rel_path, "filename": clean_name, "size": len(content)}
 
 
 @app.post("/api/run")
