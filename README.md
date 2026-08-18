@@ -22,64 +22,82 @@
 ## 🏛️ MCP Agent Architecture
 
 ```mermaid
-graph TD
+graph TB
     subgraph Clients ["🤖 AI Clients & Orchestrators"]
-        A1["Claude Desktop / Claude Code"]
-        A2["Cursor / Windsurf / VS Code"]
-        A3["OpenCode / Cline / Copilot"]
-        A4["REST API / Swagger UI"]
+        A1["<b>Claude Desktop / Code</b><br/><code>AI Pair Programmer</code>"]
+        A2["<b>Cursor / Windsurf / VS Code</b><br/><code>IDE AI Assistant</code>"]
+        A3["<b>OpenCode / Cline / Copilot</b><br/><code>Autonomous Agent</code>"]
+        A4["<b>REST API / Swagger UI</b><br/><code>Direct HTTP Client</code>"]
     end
 
-    subgraph Entrypoints ["⚡ Dual Access Surfaces"]
-        MCP["MCP Server (mcp_server.py)<br/><i>JSON-RPC 2.0 via stdio</i>"]
-        REST["REST API Server (server.py)<br/><i>FastAPI + Uvicorn (Port 8765)</i>"]
+    subgraph Surfaces ["⚡ Dual Access Surfaces"]
+        MCP["🔌 <b>Headless MCP Server</b><br/><code>mcp_server.py</code><br/><i>JSON-RPC 2.0 via stdio</i>"]
+        REST["🌐 <b>REST API Engine</b><br/><code>server.py</code><br/><i>FastAPI + OpenAPI (Port 8765)</i>"]
     end
 
     subgraph Core ["🧠 CTF KIT Core Engine"]
-        REG["Tool Registry (@tool)<br/>• Parameter Introspection<br/>• Auto Type Coercion<br/>• Schema Generator"]
-        LOG["Telemetry & LogBus<br/>• Rich Console & Progress<br/>• Live Execution Indicator"]
+        REG["⚙️ <b>Tool Registry</b> (<code>@tool</code>)<br/>Auto Introspection • Type Coercion • Schema Generator"]
+        LOG["📊 <b>Telemetry & LogBus</b><br/>Rich Live UI • CLI Progress • Trace Logs"]
     end
 
-    subgraph Modules ["🛠️ 90 Specialized Tools (9 Categories)"]
-        M1["🔤 Encoding (12 tools)<br/>Base2..85/45/91, Morse, Chain..."]
-        M2["🔐 Crypto (30 tools)<br/>RSA, AES, XOR, Ciphers, Hashes..."]
-        M3["🖼️ Stego (10 tools)<br/>LSB, PNG IHDR, DTMF, Audio WAV..."]
-        M4["🔍 Forensics (11 tools)<br/>PCAP, Keystroke, Triage, Carve..."]
-        M5["🌐 Web (10 tools)<br/>SSTI, Revshell, PHP Filter, SSRF..."]
-        M6["⚙️ Reverse (3 tools)<br/>PE/ELF Info, PYC Magic..."]
-        M7["💥 Pwn (9 tools)<br/>ROP, Format String, Shellcode..."]
-        M8["🛰️ OSINT (3 tools)<br/>DNS Queries, CRT.sh..."]
-        M9["🎯 Misc / Triage (2 tools)<br/>Auto Planner, Flag Extractor..."]
+    subgraph SecurityModules ["🛠️ 90 Specialized Security Tools (9 Categories)"]
+        direction TB
+        subgraph TopCat [" "]
+            M1["🔤 <b>Encoding</b> (12)<br/>Base2..85, Morse, ZW, Chain..."]
+            M2["🔐 <b>Crypto</b> (30)<br/>RSA, AES, XOR, Ciphers, Hashes..."]
+            M3["🖼️ <b>Stego</b> (10)<br/>LSB, IHDR, WAV Audio, DTMF..."]
+        end
+        subgraph MidCat [" "]
+            M4["🔍 <b>Forensics</b> (11)<br/>PCAP, USB Key, Triage, Carve..."]
+            M5["🌐 <b>Web</b> (10)<br/>SSTI, Revshell, PHP Filter, SSRF..."]
+            M6["⚙️ <b>Reverse</b> (3)<br/>PE Info, ELF Info, PYC Magic..."]
+        end
+        subgraph BotCat [" "]
+            M7["💥 <b>Pwn</b> (9)<br/>ROP, Format String, Shellcode..."]
+            M8["🛰️ <b>OSINT</b> (3)<br/>DNS Query, Reverse, CRT.sh..."]
+            M9["🎯 <b>Misc & Triage</b> (2)<br/>Auto Planner, Flag Extractor..."]
+        end
     end
 
     subgraph MemoryLayer ["📝 Memory & Skill Automation"]
-        MEM["memory/*.md<br/>Challenge History & Index"]
-        SKILL["~/.agents/skills/ctf-*<br/>Auto-generated Skills"]
-        WRITEUP["writeups/<category>/<br/>Automated POCs & Walkthroughs"]
+        MEM["🧠 <b>Persistent Memory</b><br/><code>memory/*.md</code> & <code>_index.md</code>"]
+        SKILL["🚀 <b>Auto-Skill Generator</b><br/><code>~/.agents/skills/ctf-*</code>"]
+        WRITEUP["📄 <b>Auto-POC Writeups</b><br/><code>writeups/&lt;category&gt;/*.md</code>"]
     end
 
+    %% Client Connections
     A1 -->|stdio JSON-RPC| MCP
     A2 -->|stdio JSON-RPC| MCP
     A3 -->|stdio JSON-RPC| MCP
-    A4 -->|HTTP / JSON| REST
+    A4 -->|HTTP REST| REST
 
-    MCP --> REG
-    REST --> REG
-    REG --> LOG
+    %% Gateway to Core
+    MCP ==> REG
+    REST ==> REG
+    REG <--> LOG
 
-    REG --> M1
-    REG --> M2
-    REG --> M3
-    REG --> M4
-    REG --> M5
-    REG --> M6
-    REG --> M7
-    REG --> M8
-    REG --> M9
+    %% Core to Modules
+    REG -.-> M1 & M2 & M3
+    REG -.-> M4 & M5 & M6
+    REG -.-> M7 & M8 & M9
 
-    M9 -.->|Remember & Recall| MEM
-    MEM -.->|Generate| SKILL
-    MEM -.->|Export| WRITEUP
+    %% Automation & Persistence
+    M9 ==>|Remember Challenge| MEM
+    MEM ==>|Scaffold Skill| SKILL
+    MEM ==>|Generate POC| WRITEUP
+
+    %% Visual Styling & Colors
+    classDef clientStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef gatewayStyle fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f0fdf4;
+    classDef coreStyle fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#fffbeb;
+    classDef moduleStyle fill:#2e1065,stroke:#a855f7,stroke-width:1.5px,color:#faf5ff;
+    classDef memStyle fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#fff1f2;
+
+    class A1,A2,A3,A4 clientStyle;
+    class MCP,REST gatewayStyle;
+    class REG,LOG coreStyle;
+    class M1,M2,M3,M4,M5,M6,M7,M8,M9 moduleStyle;
+    class MEM,SKILL,WRITEUP memStyle;
 ```
 
 ---
