@@ -143,6 +143,35 @@ Use `mcp.json` or `mcp.example.json` to register `ctf-tools` in your client conf
 
 ---
 
+## 🧠 Memory, Recall & Auto-Skill System
+
+CTF KIT features a persistent knowledge loop that turns every solved challenge or lab into permanent agent capability:
+
+```
+[Challenge / Lab Input]
+        │
+        ├──▶ 1. Plan & Recall  : scripts/plan.py & scripts/recall.py (Search past memory)
+        ├──▶ 2. Solve          : Execute via 90 MCP Tools
+        └──▶ 3. Remember       : scripts/remember.py
+                  │
+                  ├──▶ memory/*.md                  (Indexed Challenge Memory)
+                  ├──▶ ~/.agents/skills/ctf-*        (Auto-Generated Agent Skills)
+                  └──▶ writeups/<category>/*.md     (Auto-Scaffolded POC Walkthroughs)
+```
+
+### Tri-Fold Knowledge Asset
+When you recover a flag and run `remember.py`:
+1. **Challenge Memory (`memory/`)**: Records target platform, tools used, recovered flag, and lessons learned. Automatically updates `memory/_index.md`.
+2. **Autonomous Agent Skills (`~/.agents/skills/`)**: Generates standardized `SKILL.md` files with YAML frontmatter. Next time Claude Code, Cursor, or OpenCode boots up, the agent has gained new specialized solving techniques.
+3. **POC Writeup (`writeups/`)**: Scaffolds a reproducible writeup template populated with terminal commands, payload parameters, and BurpSuite workflows tailored to the challenge category.
+
+```powershell
+# Save memory and auto-generate skill + POC:
+python scripts/remember.py --title "RSA Fermat Factorization" --category crypto --tool rsa_fermat --flag "flag{fermat_crack_ok}" --note "n was product of close primes; factored in 0 iterations"
+```
+
+---
+
 ## 🧰 Tools by Category (90 Tools)
 
 | Category | Count | Tools |
