@@ -1,0 +1,14 @@
+{
+  "_comment": "Example MCP Configuration for Claude Desktop, Cursor, VS Code, Gemini, and OpenCode",
+  "mcpServers": {
+    "ctf-tools": {
+      "command": ".venv/Scripts/python",
+      "args": [
+        "e:/tools/ctf-tools/mcp_server.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

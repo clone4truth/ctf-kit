@@ -4,6 +4,7 @@ import base64
 import html
 import re
 import urllib.parse
+import zlib
 
 from ..registry import tool
 from ..utils import b64, printable, from_b64
@@ -109,9 +110,13 @@ def brainfuck(code: str, input_str: str = "") -> str:
         if c == "[":
             stack.append(i)
         elif c == "]":
+            if not stack:
+                return "ERROR: unmatched ']' in brainfuck code."
             j = stack.pop()
             jumps[i] = j
             jumps[j] = i
+    if stack:
+        return "ERROR: unmatched '[' in brainfuck code."
     steps = 0
     while pc < len(code):
         c = code[pc]

@@ -37,21 +37,53 @@ async function init() {
   setupTriageModal();
   setupLogFilters();
   connectLogs();
+  updateContentHeader();
+  
+  // Show skeleton loading cards
+  renderLoadingSkeleton();
   
   try {
     const res = await fetch("/api/tools");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     state.tools = data.tools || [];
     state.categories = data.categories || [];
 
-    $("#pill-tools").textContent = `${state.tools.length} Tools`;
-    $("#sidebar-total").textContent = state.tools.length;
+    const pillTools = $("#pill-tools");
+    if (pillTools) pillTools.textContent = `${state.tools.length} Tools`;
+    const sideTotal = $("#sidebar-total");
+    if (sideTotal) sideTotal.textContent = state.tools.length;
 
     renderSidebar();
     renderGrid();
   } catch (err) {
+    const grid = $("#toolgrid");
+    if (grid) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div style="color:var(--accent-rose);font-weight:700;margin-bottom:8px;">⚠️ Failed to auto-load tools (${escapeHtml(err.message)})</div>
+          <button class="mini-action-btn" onclick="init()" style="margin-top:10px;">🔄 Retry Auto-Load</button>
+        </div>`;
+    }
     toast(`Failed to load tools: ${err.message}`, "err");
   }
+}
+
+function renderLoadingSkeleton() {
+  const grid = $("#toolgrid");
+  if (!grid) return;
+  let cards = "";
+  for (let i = 0; i < 9; i++) {
+    cards += `
+      <div class="tool-card skeleton" style="opacity:0.6;pointer-events:none;">
+        <div class="tool-card-head">
+          <span class="cat-pill" style="background:rgba(255,255,255,0.06);color:transparent;">LOADING</span>
+        </div>
+        <h3 style="background:rgba(255,255,255,0.08);color:transparent;border-radius:4px;width:70%;">Loading tool...</h3>
+        <p class="desc" style="background:rgba(255,255,255,0.04);color:transparent;border-radius:4px;margin-top:8px;">Analyzing competitive toolkit definitions...</p>
+      </div>`;
+  }
+  grid.innerHTML = cards;
 }
 
 /* ---------- Keyboard Shortcuts ---------- */
@@ -700,4 +732,8 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-init();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
