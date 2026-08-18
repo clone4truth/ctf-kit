@@ -1,3 +1,5 @@
+<div align="center">
+
 ```text
  ██████╗████████╗███████╗    ██╗  ██╗██╗████████╗
 ██╔════╝╚══██╔══╝██╔════╝    ██║ ██╔╝██║╚══██╔══╝
@@ -10,10 +12,10 @@
 
 # CTF KIT — AI-Powered Security & CTF Engine
 
-Modular cybersecurity toolkit covering 90 specialized tools across **Encoding,
-Crypto, Stego, Forensics, Web, Reverse Engineering, Pwn, OSINT**. Designed
-specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot)
-via **Model Context Protocol (MCP)**, alongside a Headless **REST API (OpenAPI / Swagger)**.
+**Modular cybersecurity toolkit covering 90 specialized tools across 9 categories.**  
+*Designed specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot) via MCP & Headless REST API.*
+
+</div>
 
 ---
 
