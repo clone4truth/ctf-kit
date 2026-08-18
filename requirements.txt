@@ -1,0 +1,6 @@
+mcp>=2.0
+cryptography
+Pillow
+fastapi
+uvicorn
+dnspython

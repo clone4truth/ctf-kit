@@ -1,0 +1,16 @@
+flag{test}
+admin
+password
+letmein
+secret
+qwerty
+123456
+iloveyou
+ctf
+flag
+test123
+root
+toor
+welcome
+hacker
+security

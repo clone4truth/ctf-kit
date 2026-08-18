@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "ctf-tools": {
+      "type": "stdio",
+      "command": ".venv\\Scripts\\python.exe",
+      "args": ["mcp_server.py"],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CTF KIT — Competitive Toolkit</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">▮▮</span>
+    <div class="brand-text">
+      <h1>CTF<span class="accent">KIT</span></h1>
+      <p class="subtitle">competitive toolkit — crypto · stego · forensics · web · rev · pwn · osint</p>
+    </div>
+  </div>
+  <div class="status-pills">
+    <span class="pill hidden" id="pill-running"><span class="dot warn"></span> running: <span class="run-name">-</span><span class="dots"><span></span><span></span><span></span></span></span>
+    <span class="pill" id="pill-tools">0 tools</span>
+    <span class="pill" id="pill-api"><span class="dot"></span> API online</span>
+    <span class="pill" id="pill-mcp"><span class="dot"></span> MCP ready</span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="search-wrap">
+      <input id="search" type="text" placeholder="search tool… (e.g. xor, lsb, jwt)">
+    </div>
+    <nav id="catnav"></nav>
+  </aside>
+
+  <main class="content">
+    <div id="toolgrid" class="toolgrid"></div>
+    <div id="detail" class="detail hidden"></div>
+  </main>
+</div>
+
+<section id="logdock" class="logdock">
+  <div class="logdock-head">
+    <span class="logdock-title"><span class="blink">▸</span> LOG CONSOLE</span>
+    <div class="logdock-actions">
+      <button id="btn-clear-log" class="mini-btn" title="clear">clear</button>
+      <button id="btn-toggle-log" class="mini-btn" title="collapse">_</button>
+    </div>
+  </div>
+  <div id="logbody" class="logbody"></div>
+</section>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
