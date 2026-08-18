@@ -38,7 +38,7 @@ BANNER = """[bold cyan]
 ██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
 ╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
  ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
-[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE // HEXSTRIKE-STYLE SERVER[/bold green]
+[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE (90 TOOLS)[/bold green]
 """
 
 app = FastAPI(
