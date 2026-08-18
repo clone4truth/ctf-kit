@@ -43,6 +43,214 @@ def extract_flags_tool(text: str) -> str:
     return f"{len(flags)} candidate(s):\n" + "\n".join(f"  {f}" for f in flags)
 
 
+@tool(category="misc")
+def recall_knowledge(query: str, limit: int = 5) -> str:
+    """Search CTF memory, past writeups, and agent skills for relevant solving techniques, keywords, and flags.
+    
+    :param query: Search keywords or problem terms (e.g. 'rsa fermat', 'jwt confusion', 'pcap usb')
+    :param limit: Maximum number of results to return
+    """
+    mem_dir = ROOT / "memory"
+    skill_dirs = [Path.home() / ".agents" / "skills", Path.home() / ".claude" / "skills"]
+    q = query.lower().strip()
+    words = [w for w in q.split() if len(w) > 2]
+    
+    # 1. Search Memory
+    mem_hits = []
+    if mem_dir.is_dir():
+        for f in sorted(mem_dir.glob("*.md"), reverse=True):
+            if f.name == "_index.md":
+                continue
+            text = f.read_text(encoding="utf-8", errors="replace")
+            s = sum(text.lower().count(w) * 2 for w in words) + text.lower().count(q) * 3
+            if s:
+                mem_hits.append((s, f, text))
+    mem_hits = sorted(mem_hits, key=lambda x: -x[0])[:limit]
+    
+    # 2. Search Skills
+    skill_hits = []
+    seen_skills = set()
+    for sdir in skill_dirs:
+        if not sdir.is_dir():
+            continue
+        for sf in sdir.glob("*/SKILL.md"):
+            if sf.parent.name in seen_skills:
+                continue
+            stext = sf.read_text(encoding="utf-8", errors="replace")
+            s = sum(stext.lower().count(w) * 2 for w in words) + stext.lower().count(q) * 3
+            if s:
+                seen_skills.add(sf.parent.name)
+                skill_hits.append((s, sf, stext))
+    skill_hits = sorted(skill_hits, key=lambda x: -x[0])[:limit]
+    
+    if not mem_hits and not skill_hits:
+        return f"No matching memory or skills found for '{query}'."
+        
+    out = [
+        "==================================================",
+        f"🧠 RECALLED KNOWLEDGE REPORT for: '{query}'",
+        "==================================================",
+    ]
+    
+    if mem_hits:
+        out.append(f"📁 Prior Challenge Memories ({len(mem_hits)} matched):")
+        for score, f, text in mem_hits:
+            lines = text.splitlines()
+            title = next((l[2:] for l in lines if l.startswith("# ")), f.stem)
+            category = next((l.split(":", 1)[1].strip() for l in lines if l.lstrip("- ").startswith("category:")), "unknown")
+            flag = next((l.split(":", 1)[1].strip() for l in lines if l.lstrip("- ").startswith("flag:")), "-")
+            tools = next((l.split(":", 1)[1].strip() for l in lines if l.lstrip("- ").startswith("tools:")), "-")
+            out.append(f"  • [{category.upper()}] {title} (score: {score})")
+            out.append(f"    - File: memory/{f.name}")
+            if flag and flag != "-":
+                out.append(f"    - Flag: {flag}")
+            if tools and tools != "-":
+                out.append(f"    - Tools: {tools}")
+        out.append("--------------------------------------------------")
+        
+    if skill_hits:
+        out.append(f"🚀 Installed Agent Skills ({len(skill_hits)} matched):")
+        for score, sf, stext in skill_hits:
+            sname = sf.parent.name
+            sdesc = next((l.split(":", 1)[1].strip() for l in stext.splitlines() if l.startswith("description:")), "")
+            out.append(f"  • Skill: {sname} (score: {score})")
+            if sdesc:
+                out.append(f"    - {sdesc[:120]}")
+        out.append("--------------------------------------------------")
+        
+    return "\n".join(out)
+
+
+@tool(category="misc")
+def remember_challenge(
+    title: str,
+    category: str = "",
+    tool: str = "",
+    flag: str = "",
+    note: str = "",
+    platform: str = "",
+    status: str = "solved"
+) -> str:
+    """Save challenge memory, generate/merge reusable AI Agent Skill in ~/.agents/skills/, and scaffold a POC writeup.
+    
+    :param title: Challenge title (e.g. 'Baby RSA Close Primes')
+    :param category: Category ('crypto', 'web', 'stego', 'forensics', 'rev', 'pwn', 'osint', 'misc')
+    :param tool: Primary tool(s) used (e.g. 'rsa_fermat' or 'sqli_payloads, http_request')
+    :param flag: The captured flag string (e.g. 'flag{...}')
+    :param note: Key lesson, vulnerability details, or what worked
+    :param platform: CTF platform (e.g. 'picoCTF', 'HackTheBox', 'COMPFEST')
+    :param status: Challenge status ('solved' or 'wip')
+    """
+    from datetime import date
+    from ..flagmeta import detect_ctf
+    
+    auto_platform, auto_category = detect_ctf(f"{title} {note}")
+    plat = platform or auto_platform or "unknown"
+    cat = category or auto_category or "misc"
+    
+    mem_dir = ROOT / "memory"
+    mem_dir.mkdir(parents=True, exist_ok=True)
+    
+    def slug(s: str) -> str:
+        out = "".join(c if c.isalnum() else "-" for c in s.lower())
+        return "-".join(p for p in out.split("-") if p)[:60]
+        
+    stamp = f"{date.today().isoformat()}_{slug(title)}"
+    mem_file = mem_dir / f"{stamp}.md"
+    i = 1
+    while mem_file.exists():
+        mem_file = mem_dir / f"{stamp}_{i}.md"
+        i += 1
+        
+    tools_str = tool.strip()
+    tools_list = [t.strip() for t in tools_str.split(",") if t.strip()] if tools_str else []
+    
+    body = [
+        f"# {title}",
+        "",
+        f"- date: {date.today().isoformat()}",
+        f"- status: {status}",
+        f"- platform: {plat}",
+        f"- category: {cat}",
+        f"- tools: {', '.join(tools_list) or '-'}",
+        f"- flag: {flag}" if flag else "- flag: -",
+        "",
+        "## What worked / lessons",
+        "",
+        note or "_(add lessons here)_",
+        "",
+    ]
+    mem_file.write_text("\n".join(body), encoding="utf-8")
+    
+    # 1. Update Index
+    index_file = mem_dir / "_index.md"
+    if index_file.exists():
+        lines = index_file.read_text(encoding="utf-8").splitlines()
+        insert_idx = 5 if len(lines) >= 5 else len(lines)
+        lines.insert(insert_idx, f"- [{status.upper()}] **{title}** — {mem_file.name} — {', '.join(tools_list) or '-'}")
+        index_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    else:
+        index_file.write_text(f"# CTF Memory Index\n\n- [{status.upper()}] **{title}** — {mem_file.name} — {', '.join(tools_list) or '-'}\n", encoding="utf-8")
+        
+    # 2. Generate / Merge Agent Skill
+    skill_paths = []
+    if flag:
+        skill_slug = slug(tools_list[0] if tools_list else "technique")
+        skill_name = f"ctf-{slug(cat)}-{skill_slug}"
+        skill_body = f"""---
+name: {skill_name}
+description: CTF technique (category: {cat}) from a solved {plat} challenge using {', '.join(tools_list) or 'analysis'}. Use when facing {cat} challenges involving {', '.join(tools_list) or 'similar patterns'}.
+---
+
+# {title}
+
+## Overview & Context
+- **Platform:** {plat}
+- **Category:** {cat}
+- **Tools:** {', '.join(tools_list) or 'ctfkit tools'}
+- **Recovered Flag:** `{flag}`
+
+## What Worked & Actionable Lessons
+{note or 'See memory file for details.'}
+
+## Reference Memory
+- `memory/{mem_file.name}`
+"""
+        for base in [Path.home() / ".agents" / "skills", Path.home() / ".claude" / "skills"]:
+            target_skill = base / skill_name / "SKILL.md"
+            if target_skill.exists():
+                # Cumulative learning: append new challenge case study
+                existing = target_skill.read_text(encoding="utf-8", errors="replace")
+                append_entry = f"\n\n### Additional Case Study: {title} ({date.today().isoformat()})\n- **Platform:** {plat}\n- **Flag:** `{flag}`\n- **Notes:** {note}\n- **Ref:** `memory/{mem_file.name}`\n"
+                target_skill.write_text(existing + append_entry, encoding="utf-8")
+            else:
+                target_skill.parent.mkdir(parents=True, exist_ok=True)
+                target_skill.write_text(skill_body, encoding="utf-8")
+            skill_paths.append(str(target_skill))
+            
+    # 3. Generate POC Writeup
+    from scripts.writeup import generate_writeup
+    wu_file = generate_writeup(mem_file)
+    
+    report = [
+        "==================================================",
+        "🧠 CTF MEMORY & AUTONOMOUS SKILL GENERATED",
+        "==================================================",
+        f"Title        : {title}",
+        f"Category     : {cat.upper()} | Platform: {plat}",
+        f"Tools Used   : {', '.join(tools_list) or '-'}",
+        f"Flag         : {flag or 'N/A'}",
+        f"Memory File  : memory/{mem_file.name}",
+        f"Index File   : memory/_index.md (Updated)",
+        f"POC Writeup  : writeups/{cat}/{wu_file.name}",
+    ]
+    if skill_paths:
+        report.append(f"Agent Skills : {', '.join(skill_paths)}")
+    report.append(f"Lessons/Note : {note}")
+    report.append("==================================================")
+    return "\n".join(report)
+
+
 def _recall(query: str, limit: int = 3) -> list[tuple[int, str]]:
     """Score memory files against the query (mirror of scripts/recall.py)."""
     mem_dir = ROOT / "memory"

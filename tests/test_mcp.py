@@ -65,7 +65,7 @@ async def main():
     for tid in (3, 4):
         res = by_id[tid]["result"]
         print(f"call {REQS[tid-1]['params']['name']}: {res['content'][0]['text'][:60]!r}")
-    assert len(tools) >= 90, f"harus minimal 90 tool, dapat {len(tools)}"
+    assert len(tools) >= 92, f"harus minimal 92 tool, dapat {len(tools)}"
     print(f"MCP HANDSHAKE OK — All {len(tools)} tools exposed properly")
 
 

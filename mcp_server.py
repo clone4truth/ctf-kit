@@ -23,7 +23,7 @@ console = Console(stderr=True)
 server = MCPServer(
     "ctf-tools",
     version=__version__,
-    description="Comprehensive AI-powered CTF & Security Toolkit: 90 tools covering crypto, stego, forensics, web, rev, pwn, osint, encoding."
+    description="Comprehensive AI-powered CTF & Security Toolkit covering crypto, stego, forensics, web, rev, pwn, osint, encoding, misc."
 )
 
 

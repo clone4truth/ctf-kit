@@ -12,7 +12,7 @@
 
 # CTF KIT — AI-Powered Security & CTF Engine
 
-**Modular cybersecurity toolkit covering 90 specialized tools across 9 categories.**  
+**Modular cybersecurity toolkit covering 92 specialized tools across 9 categories.**  
 *Designed specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot) via MCP & Headless REST API.*
 
 </div>
@@ -40,7 +40,7 @@ graph TB
         LOG["📊 <b>Telemetry & LogBus</b><br/>Rich Live UI • CLI Progress • Trace Logs"]
     end
 
-    subgraph SecurityModules ["🛠️ 90 Specialized Security Tools (9 Categories)"]
+    subgraph SecurityModules ["🛠️ 92 Specialized Security Tools (9 Categories)"]
         direction TB
         subgraph TopCat [" "]
             M1["🔤 <b>Encoding</b> (12)<br/>Base2..85, Morse, ZW, Chain..."]
@@ -55,7 +55,7 @@ graph TB
         subgraph BotCat [" "]
             M7["💥 <b>Pwn</b> (9)<br/>ROP, Format String, Shellcode..."]
             M8["🛰️ <b>OSINT</b> (3)<br/>DNS Query, Reverse, CRT.sh..."]
-            M9["🎯 <b>Misc & Triage</b> (2)<br/>Auto Planner, Flag Extractor..."]
+            M9["🎯 <b>Misc & Memory</b> (4)<br/>Planner, Flag, Remember, Recall..."]
         end
     end
 
@@ -117,7 +117,7 @@ python -m venv .venv
 
 # 3. Tests & Validation
 .venv\Scripts\python tests/gen_testdata.py
-.venv\Scripts\python tests/test_smoke.py   # 85 tests covering all tools
+.venv\Scripts\python tests/test_smoke.py   # 87 tests covering all tools
 .venv\Scripts\python tests/test_mcp.py     # MCP handshake verification
 ```
 
@@ -150,9 +150,9 @@ CTF KIT features a persistent knowledge loop that turns every solved challenge o
 ```
 [Challenge / Lab Input]
         │
-        ├──▶ 1. Plan & Recall  : scripts/plan.py & scripts/recall.py (Search past memory)
-        ├──▶ 2. Solve          : Execute via 90 MCP Tools
-        └──▶ 3. Remember       : scripts/remember.py
+        ├──▶ 1. Plan & Recall  : recall_knowledge / scripts/recall.py (Search past memory)
+        ├──▶ 2. Solve          : Execute via 92 MCP Tools
+        └──▶ 3. Remember       : remember_challenge / scripts/remember.py
                   │
                   ├──▶ memory/*.md                  (Indexed Challenge Memory)
                   ├──▶ ~/.agents/skills/ctf-*        (Auto-Generated Agent Skills)
@@ -172,7 +172,7 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 
 ---
 
-## 🧰 Tools by Category (90 Tools)
+## 🧰 Tools by Category (92 Tools)
 
 | Category | Count | Tools |
 |---|---|---|
@@ -184,7 +184,7 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 | **rev** | 3 | `pe_info` (Windows PE32/PE32+ mitigations), `elf_info` (Linux ELF), `pyc_magic_info` |
 | **pwn** | 9 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools), `shellcode_multi` (x86/x64/ARM/Win), `shellcode_x64`, `debruijn`, `debruijn_find` |
 | **osint** | 3 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME), `dns_reverse`, `crtsh_subdomains` |
-| **misc** | 2 | `detect_challenge`, `extract_flags_tool` |
+| **misc** | 4 | `detect_challenge`, `extract_flags_tool`, `remember_challenge`, `recall_knowledge` |
 
 ---
 

@@ -2,14 +2,14 @@
 
 @memory/_index.md
 
-CTF toolkit: 57 tools (encoding, crypto, stego, forensics, web, rev, pwn,
-osint) as an MCP server (`ctf-tools`, registered in `.mcp.json`) plus a web UI
-dashboard with live log console.
+CTF toolkit: 92 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+osint, misc) as an MCP server (`ctf-tools`, registered in `.mcp.json`) plus a REST
+API server (`server.py`) with Swagger UI at `/docs`.
 
 ## Quickstart
 
 ```powershell
-.venv\Scripts\python webui.py          # web UI -> http://localhost:8765
+.venv\Scripts\python server.py          # API server -> http://localhost:8765/docs
 .venv\Scripts\python mcp_server.py     # MCP server (stdio)
 ```
 
@@ -17,10 +17,10 @@ dashboard with live log console.
 
 **PLAN FIRST, always.** Never jump straight into tools.
 
-1. **Plan.** Run `python scripts/plan.py "<problem statement>"` — it
+1. **Plan.** Run `detect_challenge` (MCP) or `python scripts/plan.py "<problem statement>"` — it
    auto-detects the **category** and **platform** from the problem/lab, lists
    suggested tools, and recalls prior memory. Write the plan down before solving.
-2. **Recall.** `python scripts/recall.py "<problem keywords>"` — read matching
+2. **Recall.** Run `recall_knowledge` (MCP) or `python scripts/recall.py "<problem keywords>"` — read matching
    `memory/*.md` files and skills. Apply prior lessons.
 3. **Solve** using the `ctf-tools` MCP tools (check the tool list first, e.g.
    `decode_base`, `xor_brute`, `stego_lsb`, `caesar`, `jwt_decode`).
@@ -28,7 +28,8 @@ dashboard with live log console.
    `picoCTF{...}`, `HTB{...}`, `COMPFEST{...}`, `flag: xxx`, `FLAG-xxx`, hex
    digests, or any `word{...}` shape. Use `extract_flags` (MCP tool) on every
    output that may contain the answer.
-5. **Save memory after solving** (no auto-plugin here):
+5. **Save memory after solving:**
+   Use `remember_challenge` (MCP tool) or CLI:
    `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked"`
    Always save when you recover a flag — this generates a reusable skill and a
    **writeup/POC** at `writeups/<category>/` with step-by-step + terminal/BurpSuite
@@ -45,9 +46,9 @@ dashboard with live log console.
 ## Testing & validation
 
 - `python tests/gen_testdata.py` regenerates `testdata/` demo files.
-- `python tests/test_smoke.py` — 85 smoke tests over all tools.
+- `python tests/test_smoke.py` — 87 smoke tests over all tools.
 - `python tests/test_mcp.py` — MCP handshake check.
-- Web UI runs on port **8765** (8000 is blocked on this machine).
+- REST API runs on port **8765** (8000 is blocked on this machine).
 
 ## Conventions
 

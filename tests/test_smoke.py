@@ -106,6 +106,9 @@ TESTS = [
     ("shellcode_multi", {"arch": "x86", "kind": "execve_sh"}),
     # --- New Master Triage Tool ---
     ("triage_file", {"path": "testdata/meta2.png"}),
+    # --- Autonomous Memory & Skill Tools ---
+    ("remember_challenge", {"title": "Smoke Test Chall", "category": "crypto", "tool": "rsa_fermat", "flag": "flag{smoke_test}", "note": "factored close primes"}),
+    ("recall_knowledge", {"query": "rsa fermat"}),
 ]
 
 failed = 0

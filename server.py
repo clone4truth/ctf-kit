@@ -65,7 +65,7 @@ CAT_ICONS = {
 
 app = FastAPI(
     title="CTF Kit — AI Security & CTF Engine",
-    description="Headless Security & CTF Engine exposing 90 tools for AI Agents and REST clients.",
+    description="Headless Security & CTF Engine exposing cybersecurity tools for AI Agents and REST clients.",
     version=__version__,
     docs_url="/docs",
     redoc_url="/redoc"

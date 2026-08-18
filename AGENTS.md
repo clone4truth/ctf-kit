@@ -1,6 +1,6 @@
 # CTF KIT — Agent Instructions (universal: opencode, Claude Code, Cursor, Codex, Gemini CLI)
 
-CTF toolkit with 90 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+CTF toolkit with 92 tools (encoding, crypto, stego, forensics, web, rev, pwn,
 osint, misc) exposed as a Headless MCP server and REST API.
 
 ## Quickstart
@@ -18,7 +18,7 @@ osint, misc) exposed as a Headless MCP server and REST API.
    `python scripts/plan.py "<problem statement>"` — it auto-detects the
    **category** and **platform** from the problem/lab, lists suggested tools,
    and recalls prior memory. Write the plan down (todo list) before solving.
-2. **Recall.** `python scripts/recall.py "<problem keywords>"` — read any
+2. **Recall.** Run `recall_knowledge` (MCP tool) or `python scripts/recall.py "<problem keywords>"` — read any
    matching `memory/*.md` and skills. Apply prior lessons.
 3. **Solve** using the `ctf-tools` MCP tools. Prefer existing
    tools; check tool names via `list_tools` / the MCP tool list first.
@@ -26,9 +26,9 @@ osint, misc) exposed as a Headless MCP server and REST API.
    `picoCTF{...}`, `HTB{...}`, `COMPFEST{...}`, `flag: xxx`, `FLAG-xxx`, hex
    digests, or any `word{...}` shape. Use `extract_flags` (MCP tool) on every
    output that may contain the answer.
-5. **Memory is automatic** (opencode plugin). In other providers, save it
-   manually after solving: `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked"`.
-   Always save when you recover a flag.
+5. **Memory is automatic.** Save directly via `remember_challenge` (MCP tool)
+   or CLI: `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked"`.
+   Always save when you recover a flag to auto-generate skills and POC writeup.
 6. **Writeup/POC auto-generated** at `writeups/<category>/<date>_<slug>.md`
    (memory + steps + terminal/BurpSuite commands per category). **Augment it**:
    edit the file with the exact step-by-step you used — commands, offsets,
@@ -46,12 +46,12 @@ osint, misc) exposed as a Headless MCP server and REST API.
 - `memory/*.md` — one file per challenge (status, tools, flag, lessons).
 - Skills auto-generate to `~/.agents/skills/ctf-*` and `~/.claude/skills/ctf-*`
   (loaded by opencode and Claude Code on next start).
-- Recall is `scripts/recall.py`; manual save is `scripts/remember.py`.
+- Recall: `recall_knowledge` (MCP) / `scripts/recall.py`; Save: `remember_challenge` (MCP) / `scripts/remember.py`.
 
 ## Testing & validation
 
 - `python tests/gen_testdata.py` regenerates `testdata/` demo files.
-- `python tests/test_smoke.py` — 85 smoke tests over all tools.
+- `python tests/test_smoke.py` — 87 smoke tests over all tools.
 - `python tests/test_mcp.py` — MCP handshake check.
 - REST API runs on port **8765** (8000 is blocked on this machine).
 
