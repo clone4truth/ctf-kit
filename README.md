@@ -55,9 +55,9 @@ graph TB
             M6["⚙️ <b>Reverse</b> (3)<br/><code>POST /api/rev/*</code>"]
         end
         subgraph BotCat [" "]
-            M7["💥 <b>Pwn</b> (9)<br/><code>POST /api/pwn/*</code>"]
+            M7["💥 <b>Pwn</b> (8)<br/><code>POST /api/pwn/*</code>"]
             M8["🛰️ <b>OSINT</b> (3)<br/><code>POST /api/osint/*</code>"]
-            M9["🎯 <b>Misc & Memory</b> (4)<br/><code>POST /api/misc/*</code>"]
+            M9["🎯 <b>Misc & Memory</b> (5)<br/><code>POST /api/misc/*</code>"]
         end
     end
 
@@ -221,31 +221,31 @@ CTF KIT features a persistent knowledge loop that turns every solved challenge o
 ```
 
 ### Tri-Fold Knowledge Asset
-When you recover a flag and run `remember.py`:
+When you recover a flag and call `remember_challenge`:
 1. **Challenge Memory (`memory/`)**: Records target platform, tools used, recovered flag, and lessons learned. Automatically updates `memory/_index.md`.
-2. **Autonomous Agent Skills (`~/.agents/skills/`)**: Generates standardized `SKILL.md` files with YAML frontmatter. Next time Claude Code, Cursor, or OpenCode boots up, the agent has gained new specialized solving techniques.
+2. **Autonomous Agent Skills (`~/.agents/skills/` & `~/.claude/skills/`)**: Generates standardized `SKILL.md` files with YAML frontmatter. Cumulative additions are appended if a similar skill exists.
 3. **POC Writeup (`writeups/`)**: Scaffolds a reproducible writeup template populated with terminal commands, payload parameters, and BurpSuite workflows tailored to the challenge category.
 
 ```powershell
-# Save memory and auto-generate skill + POC:
+# Save memory directly via CLI or via MCP Tool remember_challenge:
 python scripts/remember.py --title "RSA Fermat Factorization" --category crypto --tool rsa_fermat --flag "flag{fermat_crack_ok}" --note "n was product of close primes; factored in 0 iterations"
 ```
 
 ---
 
-## 🧰 Tools by Category (92 Tools)
+## 🧰 Complete Tool Arsenal (92 Tools across 9 Categories)
 
-| Category | Count | Tools |
+| Category | Count | Tools & Descriptions |
 |---|---|---|
-| **encoding** | 12 | `decode_base` (2/8/16/32/36/58/62/64/85), `decode_base45`, `decode_base91`, `decode_chain` (auto-unpacker), `decode_zero_width`, `encode_zero_width`, `encode_url`, `encode_html_entities`, `encode_unicode_escapes`, `morse`, `brainfuck`, `decode_all` |
+| **encoding** | 12 | `decode_base` (Base2/8/16/32/36/58/62/64/85), `decode_base45`, `decode_base91`, `decode_chain` (auto-unpacker multi-layer), `decode_zero_width`, `encode_zero_width`, `encode_url`, `encode_html_entities`, `encode_unicode_escapes`, `morse`, `brainfuck`, `decode_all` |
 | **crypto** | 30 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill` 2x2, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common` |
-| **stego** | 10 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB), `stego_dtmf_detect`, `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare` |
-| **forensics** | 11 | `triage_file`, `pcap_http` (PCAP & PCAPNG), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map`, `file_type`, `strings_extract`, `hexdump`, `carve` (15+ magics), `zlib_hunt`, `entropy_map` |
-| **web** | 10 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `revshell_generator` (multi-language & bypasses), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `sqli_payloads` |
-| **rev** | 3 | `pe_info` (Windows PE32/PE32+ mitigations), `elf_info` (Linux ELF), `pyc_magic_info` |
-| **pwn** | 9 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools), `shellcode_multi` (x86/x64/ARM/Win), `shellcode_x64`, `debruijn`, `debruijn_find` |
-| **osint** | 3 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME), `dns_reverse`, `crtsh_subdomains` |
-| **misc** | 4 | `detect_challenge`, `extract_flags_tool`, `remember_challenge`, `recall_knowledge` |
+| **stego** | 10 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB extraction), `stego_dtmf_detect` (keypad tones), `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare` |
+| **forensics** | 11 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map` |
+| **web** | 10 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `sqli_payloads` |
+| **rev** | 3 | `pe_info` (Windows PE32/PE32+ mitigations & sections), `elf_info` (Linux ELF header & symbols), `pyc_magic_info` (Python bytecode version identifier) |
+| **pwn** | 8 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools exploit scaffolding), `shellcode_multi` (Linux x86/x64, Win x86/x64, ARM), `shellcode_x64`, `debruijn`, `debruijn_find` |
+| **osint** | 3 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (Certificate Transparency logs) |
+| **misc** | 5 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection) |
 
 ---
 
@@ -260,11 +260,11 @@ ctf-tools/
 │   └── modules/            # category implementations (encoding, crypto, stego, forensics, web, rev_pwn, osint, analyze)
 ├── tests/                  # automated test suite & generators
 │   ├── gen_testdata.py     # generate test files (PCAP, PNG, audio WAV, ELF, PE)
-│   ├── test_smoke.py       # 85 smoke tests covering all tools
+│   ├── test_smoke.py       # 87 smoke tests covering all tools
 │   └── test_mcp.py         # MCP JSON-RPC stdio handshake & protocol test
 ├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool)
-├── server.py               # Main Server Engine (FastAPI / Uvicorn + Swagger docs at /docs)
-├── mcp_server.py           # Headless MCP stdio server (mcp 2.0 MCPServer)
+├── server.py               # Main Central Gateway (FastAPI / Uvicorn + Swagger docs at /docs)
+├── mcp_server.py           # Headless MCP stdio server & Gateway Bridge
 ├── memory/                 # per-challenge persistent memory + _index.md
 ├── writeups/<category>/    # step-by-step POCs with terminal commands
 ├── wordlists/              # common passwords, directories, headers
