@@ -385,7 +385,7 @@ def launch_api_server():
         border_style="green"
     ))
     import uvicorn
-    uvicorn.run("api_server:app", host="127.0.0.1", port=8765, log_level="info")
+    uvicorn.run("server:app", host="127.0.0.1", port=8765, log_level="info")
 
 
 if __name__ == "__main__":

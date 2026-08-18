@@ -171,10 +171,10 @@ def main():
     elif args.command == "mcp":
         from mcp_server import main as mcp_main
         mcp_main()
-    elif args.command == "api":
+    elif args.command == "api" or args.command == "server":
         import uvicorn
         print(f"Starting Headless REST API on http://{args.host}:{args.port} (Swagger docs: http://{args.host}:{args.port}/docs)")
-        uvicorn.run("api_server:app", host=args.host, port=args.port, log_level="info")
+        uvicorn.run("server:app", host=args.host, port=args.port, log_level="info")
     elif args.command == "tui":
         from tui import show_dashboard
         show_dashboard()

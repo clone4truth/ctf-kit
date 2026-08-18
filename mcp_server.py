@@ -3,6 +3,7 @@
 Jalankan: python mcp_server.py
 """
 
+import sys
 from mcp.server.mcpserver import MCPServer
 
 import ctfkit.modules  # noqa: F401  (mendaftarkan semua tool)
@@ -21,7 +22,18 @@ def build_server() -> MCPServer:
 
 def main():
     build_server()
-    server.run()  # transport default: stdio
+    if sys.stdin.isatty():
+        print("=" * 60)
+        print("⚡ CTF-KIT MCP SERVER (stdio mode)")
+        print("Listening for JSON-RPC protocol on stdio...")
+        print("• For interactive terminal UI, run: python tui.py")
+        print("• For REST API server, run: python server.py")
+        print("• For test handshake, run: python test_mcp.py")
+        print("=" * 60)
+    try:
+        server.run()  # transport default: stdio
+    except (KeyboardInterrupt, SystemExit):
+        pass
 
 
 if __name__ == "__main__":
