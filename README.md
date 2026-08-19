@@ -158,7 +158,7 @@ pip install -r requirements.txt
 # 1. Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
 python tests/gen_testdata.py
 
-# 2. Run smoke tests (verify all 125 tools)
+# 2. Run smoke tests (verify all 128 tools)
 python tests/test_smoke.py
 
 # 3. Verify MCP stdio JSON-RPC handshake
@@ -254,7 +254,7 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 
 ---
 
-## 🧰 Complete Tool Arsenal (123 Tools across 9 Categories)
+## 🧰 Complete Tool Arsenal (128 Tools across 9 Categories)
 
 | Category | Count | Tools & Descriptions |
 |---|---|---|
@@ -262,7 +262,7 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 | **crypto** | 36 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `aes_gcm_nonce_reuse` (nonce-reuse plaintext recovery), `ecc_point_ops` (GF(p) point arithmetic), `ecc_bsgs` (baby-step giant-step discrete log), `paillier_keygen`, `paillier_decrypt` (homomorphic crypto), `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill` 2x2, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common`, `external_crypto` (hashcat/john wrapper) |
 | **stego** | 12 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB extraction), `stego_dtmf_detect` (keypad tones), `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare`, `stego_jsteg` (JPEG entropy-decoder: JSteg LSBs of quantized DCT AC coefficients, exact coefficients, no DCT round-trip), `external_stego` (steghide/zsteg/outguess wrapper) |
 | **forensics** | 13 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map`, `ntfs_ads` (ADS listing, Windows `dir /R` / Linux getfattr), `external_forensics` (binwalk/exiftool/foremost/volatility3 wrapper) |
-| **web** | 20 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `sqli_payloads`, `command_injection_payloads`, `path_traversal_payloads`, `xxe_payloads`, `idor_payloads`, `deserialization_payloads`, `graphql_introspect` (schema dump), `oast_payload` (out-of-band callback templates: XXE/SSRF/SSTI/SQLi/Log4Shell), `file_upload_bypass`, `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers), `external_web` (ffuf/gobuster/sqlmap/nikto/wfuzz wrapper) |
+| **web** | 23 | `cve_research` (understand problem → find CVE from software/version → exploit plan via NVD + local KB), `cve_lookup` (single CVE: severity/desc/references/PoC links), `cve_search` (NVD keyword search by product+version), `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `sqli_payloads`, `command_injection_payloads`, `path_traversal_payloads`, `xxe_payloads`, `idor_payloads`, `deserialization_payloads`, `graphql_introspect` (schema dump), `oast_payload` (out-of-band callback templates: XXE/SSRF/SSTI/SQLi/Log4Shell), `file_upload_bypass`, `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers), `external_web` (ffuf/gobuster/sqlmap/nikto/wfuzz wrapper) |
 | **rev** | 4 | `pe_info` (Windows PE32/PE32+ mitigations & sections), `elf_info` (Linux ELF header & symbols), `pyc_magic_info` (Python bytecode version identifier), `external_rev` (objdump/readelf/radare2/one_gadget wrapper) |
 | **pwn** | 8 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools exploit scaffolding), `shellcode_multi` (Linux x86/x64, Win x86/x64, ARM), `shellcode_x64`, `debruijn`, `debruijn_find` |
 | **osint** | 6 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (Certificate Transparency logs), `geohash_decode` (bounds + center + box), `geocode` (Nominatim forward/reverse geocoding), `external_recon` (nmap/masscan/whatweb/dnsrecon wrapper) |

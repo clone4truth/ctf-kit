@@ -126,6 +126,11 @@ TESTS = [
     ("external_crypto", {"tool": "hashcat", "args": "-m 0 hash.txt list.txt", "auto": False}),
     ("external_rev", {"tool": "objdump", "args": "-d binary", "auto": False}),
     ("external_available", {}),
+    # --- CVE Research (network-aware; degrades to local KB when offline) ---
+    ("cve_research", {"problem": "React Server Components 19.1.0 pre-auth RCE"}),
+    ("cve_lookup", {"cve_id": "CVE-2025-55182"}),
+    ("cve_search", {"software": "Apache HTTP Server", "version": "2.4.49"}),
+    ("cve_research", {"problem": "no software here, just a random plaintext"}),
 ]
 
 failed = 0

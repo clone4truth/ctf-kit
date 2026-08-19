@@ -21,24 +21,30 @@ CLI tool wrappers per category (nmap, ffuf, sqlmap, binwalk, steghide, hashcat..
    and recalls prior memory. Write the plan down (todo list) before solving.
 2. **Recall.** Run `recall_knowledge` (MCP tool) or `python scripts/recall.py "<problem keywords>"` — read any
    matching `memory/*.md` and skills. Apply prior lessons.
-3. **Solve** using the `ctf-tools` MCP tools. Prefer existing
+3. **CVE research (known product? do this BEFORE exploiting).** Run `cve_research`
+   (MCP tool) with the problem + detected software/version. It resolves explicit
+   CVE IDs and infers CVEs from software+version (NVD + local KB), returns
+   severity/description/PoC links, and maps to the exact ctfkit exploit tool.
+   Then `cve_lookup "<CVE-ID>"` for a single CVE, `cve_search "<product>"` to
+   broaden. Skip if the challenge is purely custom code / pure crypto / pcap etc.
+4. **Solve** using the `ctf-tools` MCP tools. Prefer existing
    tools; check tool names via `list_tools` / the MCP tool list first.
-4. **Extract the flag — any format.** Do NOT assume `flag{...}`. Flags can be
+5. **Extract the flag — any format.** Do NOT assume `flag{...}`. Flags can be
    `picoCTF{...}`, `HTB{...}`, `COMPFEST{...}`, `flag: xxx`, `FLAG-xxx`, hex
    digests, or any `word{...}` shape. Use `extract_flags` (MCP tool) on every
    output that may contain the answer.
-5. **Memory is automatic.** Save directly via `remember_challenge` (MCP tool)
+6. **Memory is automatic.** Save directly via `remember_challenge` (MCP tool)
    or CLI: `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked"`.
    Always save when you recover a flag to auto-generate skills and POC writeup.
-6. **Writeup/POC auto-generated** at `writeups/<category>/<date>_<slug>.md`
+7. **Writeup/POC auto-generated** at `writeups/<category>/<date>_<slug>.md`
    (memory + steps + terminal/BurpSuite commands per category). **Augment it**:
    edit the file with the exact step-by-step you used — commands, offsets,
-   payloads, BurpSuite workflow. The writeup = your fastest/best technique.
-7. **Reusable technique? Add a tool.** If a technique repeats across
+   payloads, BurpSuite workflow, and the CVE you found. The writeup = your fastest/best technique.
+8. **Reusable technique? Add a tool.** If a technique repeats across
    challenges, scaffold it and it auto-registers (MCP + API, no config change):
    `python scripts/new_tool.py --name <snake_case> --category <cat> --summary "..." --params "a:str,b:int"`
    Then implement the function body in the generated `ctfkit/modules/<name>.py`.
-8. **Verify.** After adding tools: `python tests/test_smoke.py` (expect all OK).
+9. **Verify.** After adding tools: `python tests/test_smoke.py` (expect all OK).
 
 ## Memory & skills
 

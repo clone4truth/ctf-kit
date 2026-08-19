@@ -818,20 +818,18 @@ def discover_techniques(problem_statement: str, category: str = "") -> str:
         "",
     ]
 
-    if cves:
+    if cves or software:
         lines.append("📋 CVE-BASED RESEARCH:")
-        for cve in cves[:5]:
-            lines.append(f"  - Search exploit-db/exploitdb for {cve.upper()}")
-            lines.append(f"  - Search GitHub for {cve.upper()} PoC")
-            lines.append(f"  - Check NVD entry for {cve.upper()}")
-        lines.append("")
-
-    if software:
-        lines.append("🖥️ SOFTWARE-BASED RESEARCH:")
-        for sw in software[:5]:
-            lines.append(f"  - Search for {sw} common misconfigurations")
-            lines.append(f"  - Search for {sw} default credentials")
-            lines.append(f"  - Search for {sw} known exploits")
+        try:
+            from .cve import cve_lookup, cve_search
+            for cve in cves[:5]:
+                lines.append(cve_lookup(cve)[:500])
+            for sw in software[:3]:
+                res = cve_search(sw, "")
+                lines.append(res[:500])
+        except Exception:
+            for cve in cves[:5]:
+                lines.append(f"  - Search exploit-db/GitHub/NVD for {cve.upper()} (NVD unreachable)")
         lines.append("")
 
     lines.append("🧩 TECHNIQUE RECOMMENDATIONS:")
@@ -973,6 +971,20 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8) -> str:
             f"{fam} (x{hits})" for fam, hits in understanding["hints"][:5]))
     report.append("")
 
+    # CVE research: understand the problem -> find the CVE -> get an exploit plan
+    cve_report = ""
+    try:
+        from .cve import cve_research, detect_cves_in_problem, detect_software_in_problem
+        if detect_cves_in_problem(problem_statement) or detect_software_in_problem(problem_statement):
+            cve_report = cve_research(problem_statement)
+            report.append("🔎 CVE RESEARCH:")
+            report.append(cve_report[:1800])
+            report.append("")
+    except Exception as ex:
+        cve_report = ""
+        report.append(f"(cve_research skipped: {ex})")
+        report.append("")
+
     tried_tools: set[str] = set(excluded_tools)
     failed_keys: set[str] = set(excluded_tools)
     last_output = ""
@@ -991,6 +1003,22 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8) -> str:
     for i, step in enumerate(strategy, 1):
         report.append(f"  {i}. [{step['tool']}] {step['reason']} (source: {step['source']})")
     report.append("")
+
+    # Prefer the CVE-mapped exploit tool first when research found one
+    if cve_report:
+        mapped = re.findall(r"Next: ctf-tools ([\w]+)", cve_report)
+        for tool_name in dict.fromkeys(mapped):
+            if tool_name not in {s.get("key") for s in strategy}:
+                strategy.insert(0, {
+                    "tool": tool_name,
+                    "key": tool_name,
+                    "args": _infer_args(tool_name, plan_output, problem_statement, knowledge),
+                    "reason": f"CVE research maps to {tool_name}",
+                    "source": "cve",
+                })
+        if mapped:
+            report.append(f"🎯 CVE RESEARCH: prioritizing {', '.join(dict.fromkeys(mapped))} first")
+            report.append("")
 
     flag_found = False
     flag_text = ""

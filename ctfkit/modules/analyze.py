@@ -20,6 +20,9 @@ def detect_challenge(problem: str) -> str:
     """
     platform, category = detect_ctf(problem)
     hits = _recall(problem, limit=3)
+    from .cve import detect_cves_in_problem, detect_software_in_problem
+    cves = detect_cves_in_problem(problem)
+    software = detect_software_in_problem(problem)
     lines = [
         f"CATEGORY: {category or 'unknown'}",
         f"PLATFORM: {platform or 'unknown'}",
@@ -30,6 +33,12 @@ def detect_challenge(problem: str) -> str:
         f"  3. Apply suggested tools above; try known techniques from memory",
         "  4. Extract the flag (any format) and verify it matches the expected pattern",
     ]
+    if cves:
+        lines.append(f"CVE: explicit CVE(s) in problem: {', '.join(cves)}")
+        lines.append(f"  -> run ctf-tools cve_lookup(cve_id=...) for each, then ctf-tools cve_research(\"{problem[:80]}\") for the exploit plan")
+    for s in software:
+        lines.append(f"CVE: {s['name']} {s['version']} detected in problem")
+        lines.append(f"  -> run ctf-tools cve_research(problem=...) to find the matching CVE + exploitation steps (local KB + NVD)")
     if hits:
         lines.append("MEMORY (prior challenges):")
         lines.extend(f"  - [{s}] {t}" for s, t in hits)
