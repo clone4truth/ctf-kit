@@ -39,13 +39,16 @@ server = MCPServer(
 
 
 def make_gateway_bridge(meta: dict):
-    """Wrap tool function to execute via FastAPI Central Gateway with local fallback."""
+    """Wrap tool function to execute via FastAPI Central Gateway with local fallback.
+
+    The wrapper carries the ORIGINAL signature/docstring so MCP derives a real
+    per-tool input schema (param names, types, defaults) instead of *args/**kwargs.
+    """
     original_fn = meta["fn"]
     tool_name = meta["name"]
     category = meta.get("category", "misc")
     sig = inspect.signature(original_fn)
 
-    @functools.wraps(original_fn)
     def bridge_fn(*args, **kwargs):
         # 1. Package arguments
         try:
@@ -69,6 +72,9 @@ def make_gateway_bridge(meta: dict):
             # 3. Resilient Fallback: Execute directly in-process if server is not running
             return original_fn(*args, **kwargs)
 
+    bridge_fn.__signature__ = sig          # schema derives from the real tool signature
+    bridge_fn.__name__ = tool_name
+    bridge_fn.__doc__ = meta["doc"] or meta["summary"]
     return bridge_fn
 
 

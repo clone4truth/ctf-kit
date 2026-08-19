@@ -97,6 +97,14 @@ CATEGORIES = {
     "rev": "Reverse Engineering",
     "pwn": "Binary Exploitation",
     "osint": "OSINT",
+    "misc": "Miscellaneous",
+}
+
+# Side-effectful tools: never cache (stale network scans / state changes / long-running agents)
+_NO_CACHE = {
+    "http_request", "crtsh_subdomains", "remember_challenge", "scaffold_new_tool",
+    "reset_agent_memory", "autonomous_solve", "external_web", "external_recon",
+    "external_forensics", "external_stego", "external_crypto", "external_rev",
 }
 
 
@@ -147,7 +155,7 @@ def run_tool(name: str, args: dict) -> str:
     if "path" in sig_args and isinstance(sig_args["path"], str):
         sig_args["path"] = sig_args["path"].replace("\\", "/")
 
-    cached = cache_get(name, sig_args)
+    cached = cache_get(name, sig_args) if name not in _NO_CACHE else None
     if cached is not None:
         log.info("[%s] %s cache HIT", meta["category"], name)
         return cached
@@ -160,7 +168,7 @@ def run_tool(name: str, args: dict) -> str:
         result = fn(**sig_args)
         if not isinstance(result, str):
             result = str(result)
-        if not result.startswith("ERROR"):
+        if not result.startswith("ERROR") and name not in _NO_CACHE:
             cache_put(name, sig_args, result)
         log.info("[%s] %s done in %.2fs (%d chars)", meta["category"], name,
                  _time.monotonic() - _start, len(result))

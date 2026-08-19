@@ -76,7 +76,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -120,19 +119,20 @@ def get_tool_detail(name: str) -> dict:
     if not tool:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return {
-        "name": tool.name,
-        "category": tool.category,
-        "summary": tool.summary,
-        "doc": tool.doc,
+        "name": tool["name"],
+        "category": tool["category"],
+        "category_label": tool["category_label"],
+        "summary": tool["summary"],
+        "doc": tool["doc"],
         "parameters": [
             {
-                "name": p.name,
-                "type": p.type,
-                "required": p.required,
-                "default": p.default,
-                "doc": p.doc
+                "name": p["name"],
+                "type": p["type"],
+                "required": p["required"],
+                "default": p["default"],
+                "doc": p["doc"]
             }
-            for p in tool.parameters
+            for p in tool["params"]
         ]
     }
 

@@ -77,7 +77,8 @@ def scaffold_new_tool(name_hint: str, category: str, summary: str, params: str =
     src = f'''"""{summary}."""\n\nfrom ..registry import tool\n\n\n@tool(category={category!r})\ndef {unique_name}({", ".join(sig_parts)}) -> str:\n    """{summary}."""\n'''
     if body_parts:
         src += "\n".join(body_parts) + "\n"
-    src += '    return f"TODO: implement {unique_name} with params: {" + ", ".join(sig_parts) + "}."\n'
+    joined = ", ".join(sig_parts)
+    src += f'    return "TODO: implement {unique_name} with params: {joined}."\n'
 
     file.write_text(src, encoding="utf-8")
     _save_new_tool_counter(counter)
@@ -241,7 +242,7 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
     hex_strings = _pick(r"[0-9a-f]{16,}", problem_statement, context, knowledge)
     numbers = _pick(r"\b\d{3,}\b", problem_statement, context, knowledge)
     labeled: dict[str, str] = {}
-    for _lbl in ("n", "e", "c", "d", "p", "q", "e1", "e2", "c1", "c2", "key_length", "rails", "shift", "offset", "port", "m", "length"):
+    for _lbl in ("n", "e", "c", "d", "p", "q", "e1", "e2", "c1", "c2", "key_length", "rails", "shift", "offset", "port", "m", "length", "hash"):
         for _src in (problem_statement, context, knowledge):
             _m2 = re.search(rf"\b{_lbl}\b\s*[=:]\s*(\d+)", _src.lower())
             if _m2:
@@ -262,9 +263,50 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
         r"[\w./\\:\-]+\.(?:png|jpe?g|gif|bmp|webp|tif|ico|wav|mp3|flac|ogg|pcap|pcapng|zip|7z|rar|gz|pyc|elf|exe|dll|bin|pdf|txt|pem|key|sqlite|db|docx|xlsx|pptx|jar|apk|mp4)",
         problem_statement, context, knowledge,
     )
+    urls = _pick(r"https?://[^\s\"'<>)\]]+", problem_statement, context, knowledge)
 
     for param in param_names:
         if param == "max_iter":  # control knob, not challenge data — keep tool default
+            continue
+        if param in ("url", "host", "domain", "remote_host", "port"):
+            if param == "url":
+                args[param] = urls[0] if urls else "http://example.com"
+            else:
+                _host = urls[0].split("://")[-1].split("/")[0].split(":")[0] if urls else ""
+                _port = ""
+                if urls:
+                    try:
+                        _port = str(int(urls[0].split("://")[-1].split("/")[0].split(":")[1]))
+                    except Exception:
+                        _port = ""
+                if param == "port":
+                    args[param] = labeled.get("port") or _port or "4444"
+                elif param in ("host", "domain", "remote_host"):
+                    args[param] = _host or {"host": "example.com", "domain": "example.com", "remote_host": "chall.ctf.org"}[param]
+            continue
+        if param in ("path_a", "path_b"):
+            _idx = 0 if param == "path_a" else 1
+            if len(path_hits) > _idx:
+                args[param] = path_hits[_idx]
+            continue
+        if param == "code":
+            args[param] = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++"
+            continue
+        if param == "encoded":
+            args[param] = (b64_blobs[0] if b64_blobs else
+                           (hex_strings[0] if hex_strings else
+                            (short_hex[0] if short_hex else "aGVsbG8gY3RmIQ==")))
+            continue
+        if param == "hash_str":
+            args[param] = labeled.get("hash") or (hex_strings[0] if hex_strings else
+                                                  (short_hex[0] if short_hex else "e99a18c428cb38d5f260853678922e03"))
+            continue
+        if param in ("original_data", "append_data"):
+            args[param] = (hex_strings[0] if hex_strings else
+                           (short_hex[0] if short_hex else "61646d696e3d66616c7365")) if param == "original_data" else "admin=true"
+            continue
+        if param.endswith("_csv") and numbers:
+            args[param] = ", ".join(numbers[:3])
             continue
         if param in ("path", "file_path", "image_path", "gif_path", "pcap_path", "zip_path", "wav_path", "binary_path", "pyc_path_or_hex"):
             if path_hits:
@@ -670,6 +712,9 @@ def _build_strategy(
     steps: list[dict] = []
     excluded: list[str] = list(exclude or [])
     hint = f" {extra_context[:400]}" if extra_context else ""
+    # params (csv key data, PEM key material) can't be inferred from free text —
+    # queueing them would produce guaranteed-ERROR runs
+    _UNINFERABLE = {"rsa_hastad", "rsa_parse_key"}
 
     for step in _external_steps(category, problem_statement, knowledge, excluded, extra_context, hints):
         steps.append(step)
@@ -682,7 +727,7 @@ def _build_strategy(
             continue
         if line_stripped.startswith("SUGGESTED TOOLS:"):
             for name in line_stripped.split(":", 1)[1].replace(",", " ").split():
-                if name in TOOLS and name not in excluded and not name.startswith("external_"):
+                if name in TOOLS and name not in excluded and not name.startswith("external_") and name not in _UNINFERABLE:
                     steps.append({
                         "tool": name,
                         "key": name,
@@ -699,7 +744,7 @@ def _build_strategy(
         for tool_line in recommended.splitlines()[1:]:
             if "[" in tool_line and "]" in tool_line:
                 tool_name = tool_line.split("]")[1].split("(")[0].strip()
-                if tool_name in TOOLS and tool_name not in excluded and not tool_name.startswith("external_"):
+                if tool_name in TOOLS and tool_name not in excluded and not tool_name.startswith("external_") and tool_name not in _UNINFERABLE:
                     if not state.is_technique_failed(category, line_stripped, tool_name):
                         inferred_args = _infer_args(tool_name, line_stripped, problem_statement, knowledge)
                         steps.append({
@@ -716,7 +761,7 @@ def _build_strategy(
         for name, meta in TOOLS.items():
             if category and meta["category"] != category:
                 continue
-            if name in excluded or name.startswith("external_"):
+            if name in excluded or name.startswith("external_") or name in _UNINFERABLE:
                 continue
             if not state.is_technique_failed(category, category, name):
                 inferred_args = _infer_args(name, category, problem_statement, knowledge)

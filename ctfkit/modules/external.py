@@ -171,6 +171,9 @@ HINT = {
     "socat": "apt install socat", "msfvenom": "apt install metasploit-framework",
     "file": "apt install file", "strings": "apt install binutils",
     "xxd": "apt install xxd", "base64": "apt install coreutils",
+    "capinfos": "apt install tshark", "gpg": "apt install gnupg",
+    "mmls": "apt install sleuthkit", "fls": "apt install sleuthkit",
+    "fsstat": "apt install sleuthkit",
     "foremost": "apt install foremost", "scalpel": "apt install scalpel",
 }
 
@@ -348,7 +351,7 @@ DEFAULT_ARGS = {
 }
 
 # tools that were in ALLOWED but have no auto-queued template
-_NO_TEMPLATE = {"searchsploit", "sherlock", "maigret", "recon-ng", "jwt_tool", "retdec", "angr", "clang", "gcc"}
+_NO_TEMPLATE = {"searchsploit", "sherlock", "maigret", "recon-ng", "jwt_tool", "retdec", "angr", "clang", "gcc", "sleuthkit", "z3"}
 
 
 def _find_exe(name: str) -> str | None:

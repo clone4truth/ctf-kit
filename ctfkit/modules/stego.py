@@ -64,14 +64,17 @@ def stego_metadata(image_path: str) -> str:
 def stego_channel(image_path: str, channel: str = "R", out_path: str = "channel.png") -> str:
     """Isolate one color channel (R/G/B/A) into a grayscale image. Saved to out_path."""
     from PIL import Image
-    idx = {"R": 0, "G": 1, "B": 2, "A": 3}[channel.upper()]
+    idx = {"R": 0, "G": 1, "B": 2, "A": 3}
+    ch = channel.upper()
+    if ch not in idx and len(ch) > 1:
+        ch = ch[0]
     img = Image.open(image_path).convert("RGBA")
     w, h = img.size
     out = Image.new("L", (w, h))
     px = img.load()
     for y in range(h):
         for x in range(w):
-            out.putpixel((x, y), px[x, y][idx])
+            out.putpixel((x, y), px[x, y][idx[ch]])
     out.save(out_path)
     return f"Channel {channel.upper()} saved to {out_path} ({w}x{h})."
 
