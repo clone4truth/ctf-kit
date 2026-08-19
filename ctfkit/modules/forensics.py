@@ -519,3 +519,163 @@ def ntfs_ads(path: str) -> str:
         return f"getfattr output:\n{out}" if out.strip() else f"No xattrs/ADS found on {path}."
     except OSError:
         return "ERROR: getfattr not installed. apt install attr"
+
+@tool(category="forensics")
+def sqlite_reader(path: str, table: str = "") -> str:
+    """Read SQLite databases: list tables, dump rows, and scan every field for flag patterns.
+
+    Uses Python stdlib sqlite3 — works even when the sqlite3 CLI is missing.
+
+    :param path: path to the .db / .sqlite file
+    :param table: optional table name to dump (default: all tables)
+    """
+    import sqlite3 as _sq
+    from ..flagmeta import extract_flags, detect_flag
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(16) != b"SQLite format 3\x00":
+                return "ERROR: not a SQLite database (magic 'SQLite format 3' missing)"
+    except OSError as e:
+        return f"ERROR: {e}"
+    try:
+        con = _sq.connect(f"file:{path}?mode=ro", uri=True)
+        con.text_factory = bytes
+        cur = con.cursor()
+    except _sq.Error as e:
+        return f"ERROR: {e}"
+    try:
+        cur.execute("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name")
+        tables = [(r[0].decode("utf-8", "replace"), r[1].decode()) for r in cur.fetchall()]
+        if not tables:
+            return "No tables found."
+        out = [f"tables ({len(tables)}):"]
+        for name, typ in tables:
+            try:
+                cur.execute(f'SELECT COUNT(*) FROM "{name}"')
+                cnt = cur.fetchone()[0]
+            except _sq.Error:
+                cnt = "?"
+            out.append(f"  - {name} ({typ}, rows={cnt})")
+        targets = [table] if table else [t[0] for t in tables]
+        hits = []
+        for name in targets:
+            try:
+                cur.execute(f'SELECT * FROM "{name}" LIMIT 200')
+                cols = [d[0] for d in cur.description]
+                rows = cur.fetchall()
+            except _sq.Error as e:
+                out.append(f"  [{name}] ERROR: {e}")
+                continue
+            out.append("")
+            out.append(f"== {name} ==")
+            out.append(" | ".join(cols))
+            for row in rows:
+                cells = []
+                for v in row:
+                    if isinstance(v, bytes):
+                        s = printable(v, 120)
+                    else:
+                        s = str(v)[:120]
+                    cells.append(s)
+                out.append(" | ".join(cells))
+                for v in row:
+                    s = v.decode("utf-8", "replace") if isinstance(v, bytes) else str(v)
+                    fl = extract_flags(s)
+                    if fl:
+                        hits.append((name, s[:200], fl))
+        con.close()
+        if hits:
+            out.append("")
+            out.append("FLAG CANDIDATES:")
+            for name, src, fl in hits:
+                out.append(f"  [{name}] {src} -> {fl}")
+        return "\n".join(out)[:12000]
+    except _sq.Error as e:
+        con.close()
+        return f"ERROR: {e}"
+
+
+@tool(category="forensics")
+def pdf_analyze(path: str, object_id: int = 0) -> str:
+    """Analyze PDF files: object map, metadata, and every FlateDecode stream (auto-decompressed).
+
+    Flags are often hidden inside compressed streams (zlib) or JavaScript actions.
+
+    :param path: path to the PDF file
+    :param object_id: dump a single object in detail (0 = summarize all)
+    """
+    import hashlib as _hl
+    try:
+        data = open(path, "rb").read()
+    except OSError as e:
+        return f"ERROR: {e}"
+    if not data.startswith(b"%PDF-"):
+        return "ERROR: not a PDF (magic %PDF- missing)"
+    version = data[5:8].decode("utf-8", "replace")
+    objs = re.findall(rb"(\d+)\s+0\s+obj\b(.*?)endobj", data, re.S)
+    out = [f"PDF version {version}, {len(objs)} objects, {len(data)} bytes"]
+    meta: dict[str, str] = {}
+    streams = []
+    for num, body in objs:
+        num_i = int(num)
+        body_txt = body[:3000]
+        dict_part = body_txt.split(b"stream")[0] if b"stream" in body_txt else body_txt
+        is_stream = b"stream" in body_txt
+        length = 0
+        filt = ""
+        lm = re.search(rb"/Length\s+(\d+)", dict_part)
+        if lm:
+            length = int(lm.group(1))
+        fm = re.search(rb"/Filter\s*(?:\[([^\]]*)\]|/(\w+))", dict_part)
+        if fm:
+            filt = (fm.group(1) or fm.group(2)).decode("utf-8", "replace").strip()
+        for key in (b"/Title", b"/Author", b"/Creator", b"/Producer", b"/Subject", b"/Keywords"):
+            km = re.search(re.escape(key) + rb"\s*\(([^)]*)\)", body_txt)
+            if km:
+                meta[key.decode()] = km.group(1).decode("utf-8", "replace")
+        if is_stream:
+            sbody = body_txt.split(b"stream", 1)[1]
+            sbody = sbody.lstrip(b"\r\n")
+            raw = sbody[:length] if length else sbody
+            streams.append((num_i, length, filt, raw))
+    if meta:
+        out.append("")
+        out.append("metadata:")
+        for k, v in meta.items():
+            out.append(f"  {k}: {v}")
+    out.append("")
+    out.append(f"streams: {len(streams)}")
+    hits = []
+    for num_i, length, filt, raw in streams:
+        dec = raw
+        if "Flate" in filt or filt == "":
+            try:
+                dec = zlib.decompress(raw)
+            except Exception:
+                pass
+        text = printable(dec, 4000)
+        out.append(f"  obj {num_i}: /Length={length} /Filter={filt or '(none)'} -> {len(dec)} bytes")
+        if b"flag" in dec.lower() or b"{" in dec[:2000]:
+            lines = [l for l in dec.splitlines() if b"flag" in l.lower() or b"{" in l]
+            for l in lines[:5]:
+                out.append(f"    candidate: {printable(l, 300)}")
+        h = _hl.sha256(dec).hexdigest()[:16]
+        out.append(f"    sha256[0:16]: {h}")
+        if text:
+            out.append(f"    preview: {text[:400]}")
+    if object_id:
+        for num_i, length, filt, raw in streams:
+            if num_i == object_id:
+                dec = raw
+                if "Flate" in filt or filt == "":
+                    try:
+                        dec = zlib.decompress(raw)
+                    except Exception:
+                        pass
+                out.append("")
+                out.append(f"== object {object_id} stream ==")
+                out.append(printable(dec, 4000))
+    if hits:
+        out.append("")
+        out.append("FLAG CANDIDATES: " + ", ".join(hits))
+    return "\n".join(out)[:12000]

@@ -115,6 +115,7 @@ _NO_CACHE = {
     "http_request", "crtsh_subdomains", "remember_challenge", "scaffold_new_tool",
     "reset_agent_memory", "autonomous_solve", "external_web", "external_recon",
     "external_forensics", "external_stego", "external_crypto", "external_rev",
+    "chain_tools", "github_search", "whois_query", "dns_query", "dns_reverse",
 }
 
 

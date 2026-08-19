@@ -13,6 +13,35 @@ if hasattr(sys.stdout, "reconfigure"):
 import ctfkit.modules  # noqa
 from ctfkit.registry import run_tool
 
+
+def _mt19937_outs(seed=42, n=624):
+    """Reference MT19937 (classic 1812433253 seeding) outputs for mt19937_predict tests."""
+    s = [0] * 624
+    s[0] = seed & 0xFFFFFFFF
+    for i in range(1, 624):
+        s[i] = (1812433253 * (s[i - 1] ^ (s[i - 1] >> 30)) + i) & 0xFFFFFFFF
+    idx = 624
+
+    def gen():
+        nonlocal idx
+        if idx >= 624:
+            for i in range(624):
+                y = (s[i] & 0x80000000) + (s[(i + 1) % 624] & 0x7FFFFFFF)
+                s[i] = s[(i + 397) % 624] ^ (y >> 1) ^ (0x9908B0DF if y & 1 else 0)
+            idx = 0
+        y = s[idx]
+        idx += 1
+        y ^= y >> 11
+        y ^= (y << 7) & 0x9D2C5680
+        y ^= (y << 15) & 0xEFC60000
+        y ^= y >> 18
+        return y & 0xFFFFFFFF
+
+    return [gen() for _ in range(n)]
+
+
+_MT_624 = _mt19937_outs()
+
 TESTS = [
     ("decode_all", {"data": "aGVsbG8gY3RmIQ=="}),
     ("decode_base", {"encoded": "SSdtIGtpZGRpbmcgeW91ciBicmFpbiwgbGlrZSBhIHRyZWFzdHVyZSBoYXJkIGZpbmRpbmcu", "base": 64}),
@@ -126,6 +155,19 @@ TESTS = [
     ("external_crypto", {"tool": "hashcat", "args": "-m 0 hash.txt list.txt", "auto": False}),
     ("external_rev", {"tool": "objdump", "args": "-d binary", "auto": False}),
     ("external_available", {}),
+    # --- New tools batch: orchestrate / web / forensics / crypto / osint ---
+    ("chain_tools", {"steps": '[{"tool":"decode_all","data":"$data"},{"tool":"extract_flags_tool","text":"$prev"}]', "data": "ZmxhZ3tjaGFpbl90b29sfQ=="}),
+    ("flask_session", {"session_cookie": "eyJ1c2VyIjoiYWRtaW4ifQ.1.abc", "secret": "SECRET", "action": "decode", "digest": "sha1"}),
+    ("flask_session", {"session_cookie": "", "secret": "SECRET", "action": "forge", "payload_json": '{"user":"admin"}', "digest": "sha1"}),
+    ("sqlite_reader", {"path": "testdata/flag.db", "table": ""}),
+    ("pdf_analyze", {"path": "testdata/mini.pdf", "object_id": 0}),
+    ("ecdsa_nonce_reuse", {"p": 17, "a": 2, "b": 2, "gx": 5, "gy": 1, "n": 19, "r1": 9, "s1": 17, "h1": 3, "r2": 9, "s2": 2, "h2": 4, "q1x": 0, "q1y": 6}),
+    ("pollard_p1", {"n": 98921925799, "bound": 1000}),
+    ("pohlig_hellman", {"g": 19, "h": 2146803, "p": 4084081}),
+    ("mt19937_predict", {"outputs_csv": ",".join(map(str, _MT_624)), "predict": 3}),
+    ("dork_generator", {"domain": "example.com", "keywords": "password,api_key", "filetype": "env", "username": "admin"}),
+    ("github_search", {"query": "example.com", "limit": 3}),
+    ("whois_query", {"domain": "example.com"}),
     # --- CVE Research (network-aware; degrades to local KB when offline) ---
     ("cve_research", {"problem": "React Server Components 19.1.0 pre-auth RCE"}),
     ("cve_lookup", {"cve_id": "CVE-2025-55182"}),

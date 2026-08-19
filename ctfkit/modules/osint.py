@@ -138,3 +138,114 @@ def geocode(address: str = "", latitude: float = 0.0, longitude: float = 0.0) ->
         return "Provide an address, or latitude + longitude."
     except Exception as ex:
         return f"ERROR: {ex}"
+
+@tool(category="osint")
+def dork_generator(domain: str = "", keywords: str = "", filetype: str = "", username: str = "") -> str:
+    """Generate Google / GitHub / Shodan search dorks (OSINT recon queries) for a target.
+
+    Combines site:, inurl:, intitle:, filetype:, intext:, and service-specific operators.
+
+    :param domain: target domain (e.g. example.com)
+    :param keywords: interesting keywords to hunt (comma-separated)
+    :param filetype: file extension to look for (e.g. pdf, xls, sql, env, log)
+    :param username: target username / email to search
+    """
+    kws = [k.strip() for k in keywords.split(",") if k.strip()]
+    out = ["Google dorks:"]
+    site = f"site:{domain}" if domain else ""
+    for kw in (kws or [""]):
+        kwp = f" \"{kw}\"" if kw else ""
+        if site:
+            out.append(f"  {site}{kwp}")
+            if filetype:
+                out.append(f"  {site} filetype:{filetype}{kwp}")
+            out.append(f"  {site} inurl:admin{kwp} | inurl:login{kwp}")
+            out.append(f"  {site} inurl:.git{kwp} | inurl:backup{kwp}")
+            out.append(f"  {site} ext:env{kwp} | ext:sql{kwp} | ext:log{kwp}")
+            out.append(f"  {site} intitle:index.of{kwp}")
+            out.append(f"  {site} intext:password{kwp} | intext:api_key{kwp} | intext:secret{kwp}")
+        else:
+            out.append(f"  \"{kw}\" filetype:{filetype or 'pdf'}")
+    if username:
+        out.append("GitHub dorks:")
+        out.append(f"  \"{username}\" in:email | in:username | in:login")
+        out.append(f"  \"{username}\" extension:json | extension:env | extension:ini")
+        out.append("  (search GitHub code / commits for: password, api_key, token, secret, BEGIN PRIVATE KEY)")
+        out.append("Shodan dorks:")
+        out.append(f"  hostname:{domain or 'example.com'} | ssl.cert.subject.cn:{domain or 'example.com'}")
+        out.append(f"  http.title:{username or keywords or 'admin'} | port:22,3306,3389,8080")
+    return "\n".join(out)
+
+
+@tool(category="osint")
+def github_search(query: str, limit: int = 10) -> str:
+    """Search public code for credentials/flags via the grep.app code-search API (no auth required).
+
+    Best for OSINT: leaked tokens, keys, .env files, or code mentioning a target.
+
+    :param query: code search query (e.g. 'example.com api_key' or 'BEGIN PRIVATE KEY')
+    :param limit: maximum results to return
+    """
+    import urllib.parse as _up
+    url = "https://grep.app/api/search?regexp=false&q=" + _up.quote(query)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ctfkit-github-search/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return "github_search unavailable (network/rate-limited) — requires testing"
+    hits = (data or {}).get("hits", {}).get("hits", [])
+    if not hits:
+        return f"No code results for query: {query}"
+    out = [f"{len(hits)} result(s) for: {query}"]
+    for h in hits[:limit]:
+        repo = (h.get("repo", {}) or {}).get("raw", "?")
+        path = h.get("path", {}).get("raw", "?")
+        snippet = (h.get("content", {}).get("snippet", "") or "").replace("\n", " ")
+        if len(snippet) > 200:
+            snippet = snippet[:197] + "..."
+        out.append(f"- {repo}:{path}")
+        out.append(f"    {snippet}")
+    return "\n".join(out)
+
+
+@tool(category="osint")
+def whois_query(domain: str, server: str = "whois.iana.org") -> str:
+    """Query a WHOIS server (port 43) for registration/ownership info. Follows one referral hop for domains.
+
+    :param domain: target domain or IP (e.g. example.com or 8.8.8.8)
+    :param server: whois server (default whois.iana.org)
+    """
+    def _q(host: str, q: str, limit: int = 4000) -> str:
+        try:
+            s = socket.create_connection((host, 43), timeout=12)
+            s.sendall((q + "\r\n").encode())
+            data = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+                if len(data) > 60000:
+                    break
+            s.close()
+            return data.decode("utf-8", "replace")[:limit]
+        except OSError as ex:
+            return f"__ERR__ {ex}"
+    try:
+        out = _q(server, domain)
+    except Exception as ex:
+        return f"ERROR: {ex}"
+    if out.startswith("__ERR__"):
+        return "whois_query unavailable (network blocked) — requires testing"
+    # follow referral for domain queries (IANA returns 'refer: <whois server>')
+    ref = None
+    for line in out.splitlines():
+        if line.lower().startswith("refer:"):
+            ref = line.split(":", 1)[1].strip()
+            break
+    if ref and ref != server and "iana" in server:
+        ref_out = _q(ref, domain)
+        if not ref_out.startswith("__ERR__"):
+            out = f"referral -> {ref}\n\n" + ref_out
+    return out[:5000]

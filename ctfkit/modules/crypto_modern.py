@@ -790,3 +790,260 @@ def paillier_decrypt(ciphertext: int, p: int, q: int, g: int = 0) -> str:
         return f"m = {m}"
     except Exception as ex:
         return f"ERROR: {ex}"
+
+def _ec_add(px, py, qx, qy, a, p):
+    """Point addition on y^2 = x^3 + ax + b mod p (None = point at infinity)."""
+    if px is None:
+        return (qx, qy)
+    if qx is None:
+        return (px, py)
+    if px == qx and (py + qy) % p == 0:
+        return (None, None)
+    if px == qx and py == qy:
+        lam = (3 * px * px + a) * pow(2 * py, -1, p) % p
+    else:
+        lam = (qy - py) * pow(qx - px, -1, p) % p
+    x3 = (lam * lam - px - qx) % p
+    y3 = (lam * (px - x3) - py) % p
+    return (x3, y3)
+
+
+def _ec_mul(k, px, py, a, p):
+    r = (None, None)
+    bx, by = px, py
+    while k:
+        if k & 1:
+            r = _ec_add(r[0], r[1], bx, by, a, p)
+        bx, by = _ec_add(bx, by, bx, by, a, p)
+        k >>= 1
+    return r
+
+
+def _factor_smooth(n: int) -> list[tuple[int, int]]:
+    """Trial-division factorization into (prime, exponent) pairs."""
+    fac = []
+    d = 2
+    while d * d <= n:
+        if n % d == 0:
+            e = 0
+            while n % d == 0:
+                n //= d
+                e += 1
+            fac.append((d, e))
+        d += 1
+    if n > 1:
+        fac.append((n, 1))
+    return fac
+
+
+def _is_prime(n: int) -> bool:
+    """Trial-division primality check (fine for the small moduli PH handles)."""
+    if n < 2:
+        return False
+    if n % 2 == 0:
+        return n == 2
+    d = 3
+    while d * d <= n:
+        if n % d == 0:
+            return False
+        d += 2
+    return True
+
+
+@tool(category="crypto")
+def ecdsa_nonce_reuse(p: int, a: int, b: int, gx: int, gy: int, n: int, r1: int, s1: int, h1: int, r2: int, s2: int, h2: int, q1x: int = 0, q1y: int = 0) -> str:
+    """ECDSA nonce reuse attack: recover the nonce k and the private key d from two signatures sharing k.
+
+    k = (h1 - h2) * (s1 - s2)^-1 mod n, then d = (s1*k - h1) * r1^-1 mod n.
+    Verify against public key Q1 = d*G when q1x/q1y are provided.
+
+    :param p: curve prime p
+    :param a: curve coefficient a
+    :param b: curve coefficient b
+    :param gx: base point G x
+    :param gy: base point G y
+    :param n: subgroup order of G
+    :param r1: signature 1 r
+    :param s1: signature 1 s
+    :param h1: message hash 1 (as integer)
+    :param r2: signature 2 r
+    :param s2: signature 2 s
+    :param h2: message hash 2 (as integer)
+    :param q1x: public key Q1 x (optional verification)
+    :param q1y: public key Q1 y (optional verification)
+    """
+    try:
+        if (s1 - s2) % n == 0:
+            return "ERROR: s1 == s2 mod n (not a nonce reuse case?)"
+        k = (h1 - h2) * pow(s1 - s2, -1, n) % n
+        d = (s1 * k - h1) * pow(r1, -1, n) % n
+        lines = [
+            f"k (nonce)  = {k}",
+            f"d (private)= {d}",
+            f"k (hex)    = {k:016x}",
+            f"d (hex)    = {d:016x}",
+        ]
+        if q1x or q1y:
+            qx, qy = _ec_mul(d, gx, gy, a, p)
+            lines.append(f"d*G = ({qx}, {qy})")
+            lines.append(f"Q1  = ({q1x}, {q1y})")
+            lines.append("verify d*G == Q1: " + ("MATCH" if (qx == q1x and qy == q1y) else "MISMATCH"))
+        return "\n".join(lines)
+    except Exception as ex:
+        return f"ERROR: {ex}"
+
+
+@tool(category="crypto")
+def mt19937_predict(outputs_csv: str, predict: int = 5) -> str:
+    """Recover the MT19937 (Mersenne Twister) internal state from 624 consecutive 32-bit outputs and predict the next values.
+
+    Undoes the tempering transform to rebuild state[624], then forwards the generator.
+
+    :param outputs_csv: 624 consecutive 32-bit outputs (comma-separated)
+    :param predict: how many future outputs to predict (default 5)
+    """
+    try:
+        outs = [int(x.strip()) for x in outputs_csv.split(",") if x.strip()]
+    except ValueError:
+        return "ERROR: outputs_csv must be comma-separated integers"
+    if len(outs) < 624:
+        return f"ERROR: need 624 outputs to recover the state (got {len(outs)})"
+    outs = outs[:624]
+
+    def _unshift_right(x: int, shift: int) -> int:
+        res = x
+        for _ in range(5):
+            res = x ^ (res >> shift)
+        return res
+
+    def _unshift_left(x: int, shift: int, mask: int) -> int:
+        res = x
+        for _ in range(5):
+            res = x ^ ((res << shift) & mask)
+        return res
+
+    def untemper(x: int) -> int:
+        x = _unshift_right(x, 18)
+        x = _unshift_left(x, 15, 0xEFC60000)
+        x = _unshift_left(x, 7, 0x9D2C5680)
+        x = _unshift_right(x, 11)
+        return x & 0xFFFFFFFF
+
+    state = [untemper(o) for o in outs]
+    idx = 624  # force a twist on the first fetch
+
+    def _twist():
+        for i in range(624):
+            y = (state[i] & 0x80000000) + (state[(i + 1) % 624] & 0x7FFFFFFF)
+            state[i] = state[(i + 397) % 624] ^ (y >> 1) ^ (0x9908B0DF if y & 1 else 0)
+
+    def _temper(y: int) -> int:
+        y ^= (y >> 11)
+        y ^= (y << 7) & 0x9D2C5680
+        y ^= (y << 15) & 0xEFC60000
+        y ^= (y >> 18)
+        return y & 0xFFFFFFFF
+
+    def next_int() -> int:
+        nonlocal idx
+        if idx >= 624:
+            _twist()
+            idx = 0
+        y = state[idx]
+        idx += 1
+        return _temper(y)
+
+    pred = [next_int() for _ in range(predict)]
+    lines = [f"state recovered: {len(state)} uint32 values", f"next {predict} outputs:"]
+    for i, v in enumerate(pred, 1):
+        lines.append(f"  #{i}: {v}")
+    return "\n".join(lines)
+
+
+@tool(category="crypto")
+def pollard_p1(n: int, bound: int = 100000) -> str:
+    """Pollard p-1 factorization: works when one factor p has a smooth p-1 (all prime factors of p-1 <= bound).
+
+    :param n: RSA modulus / composite to factor
+    :param bound: smoothness bound (default 100000)
+    """
+    import math as _math
+    if n < 2:
+        return "ERROR: n must be >= 2"
+    if _math.isqrt(n) ** 2 == n:
+        return f"n is a perfect square: {_math.isqrt(n)}^2"
+    a = 2
+    primes = []
+    for cand in range(2, bound + 1):
+        if all(cand % p for p in primes):
+            primes.append(cand)
+    try:
+        for p in primes:
+            pe = p
+            while pe * p <= bound:
+                pe *= p
+            a = pow(a, pe, n)
+            g = _math.gcd(a - 1, n)
+            if 1 < g < n:
+                q = n // g
+                return f"factors found:\np = {g}\nq = {q}\np*q = n: {g * q == n}\nbound needed: <= {p}"
+        return f"no factor found with bound {bound} (p-1 not B-smooth?)"
+    except Exception as ex:
+        return f"ERROR: {ex}"
+
+
+@tool(category="crypto")
+def pohlig_hellman(g: int, h: int, p: int) -> str:
+    """Pohlig-Hellman discrete log: solve g^x = h mod p when p-1 factors into small primes.
+
+    :param g: generator
+    :param h: target value
+    :param p: prime modulus
+    """
+    if p < 2 or not _is_prime(p):
+        return "ERROR: p must be prime"
+    fac = _factor_smooth(p - 1)
+    if max(f for f, _ in fac) > 1_000_000:
+        return f"ERROR: p-1 has a too-large prime factor {max(f for f, _ in fac)}; Pohlig-Hellman will not help"
+    # order of g (divide out prime powers)
+    order = p - 1
+    for q, e in fac:
+        while order % q == 0 and pow(g, order // q, p) == 1:
+            order //= q
+    ofac = _factor_smooth(order)
+    if max(f for f, _ in ofac) > 1_000_000:
+        return f"ERROR: order of g has a too-large prime factor {max(f for f, _ in ofac)}"
+    # for each prime power q^e || order, find x mod q^e (digit-by-digit)
+    xs = []
+    for q, e in ofac:
+        qe = q ** e
+        gamma = pow(g, order // q, p)  # order q
+        xj = 0
+        hj = h
+        for j in range(e):
+            # c = (h * g^-x_so_far)^(order / q^(j+1)) == gamma^(d_j)
+            c = pow(hj, order // (q ** (j + 1)), p)
+            d = 0
+            for cand in range(q):
+                if pow(gamma, cand, p) == c:
+                    d = cand
+                    break
+            xj += d * (q ** j)
+            hj = hj * pow(g, -d * (q ** j), p) % p
+        xs.append((qe, xj % qe))
+    # CRT combine
+    x = 0
+    M = 1
+    for qe, xi in xs:
+        t = pow(M % qe, -1, qe)
+        x = (x + M * ((xi - x) % qe) * t) % (M * qe)
+        M *= qe
+    check = pow(g, x, p)
+    lines = [
+        f"p-1 factors: {fac}",
+        f"order of g: {order}",
+        f"local solutions: {xs}",
+        f"x = {x}",
+        f"verify g^x = h: {check == h}",
+    ]
+    return "\n".join(lines)

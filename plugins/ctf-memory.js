@@ -197,7 +197,10 @@ function writeMemory({ sessionID, title, status, runs, flag, snippet, ctf }) {
     "",
     "## Approach",
     "",
-    ...runs.map((r) => `- \`${r.tool}\` ${r.args ? `(${r.args})` : ""} → ${r.ok ? "ok" : "failed"}`),
+    ...runs.map((r) => {
+      const line = `- \`${r.tool}\` ${r.args ? `(${r.args})` : ""} → ${r.ok ? "ok" : "failed"}`
+      return r.out ? `${line}\n  out: ${r.out}` : line
+    }),
     "",
     ...(flag ? ["## Result", "", `Flag recovered: \`${flag}\``, ""] : []),
     ...(snippet ? ["## Evidence snippet", "", "```", snippet.slice(0, 800), "```", ""] : []),
@@ -256,9 +259,9 @@ export const CtfMemory = async ({ client, $ }) => {
   const solvedBySession = new Map()
   const ctfBySession = new Map()
 
-  const recordRun = (sessionID, tool, args, ok) => {
+  const recordRun = (sessionID, tool, args, ok, out = "") => {
     if (!runsBySession.has(sessionID)) runsBySession.set(sessionID, [])
-    runsBySession.get(sessionID).push({ ts: timeStamp(), tool, args, ok })
+    runsBySession.get(sessionID).push({ ts: timeStamp(), tool, args, ok, out: out.slice(0, 400) })
   }
 
   const ctfFor = (sessionID) => ctfBySession.get(sessionID) ?? { platform: null, category: null }
@@ -286,7 +289,7 @@ export const CtfMemory = async ({ client, $ }) => {
       const { tool, sessionID } = input
       if (!sessionID) return
       const isMCP = MCP_TOOL_RE.test(tool)
-      if (isMCP) recordRun(sessionID, tool.replace(MCP_TOOL_RE, ""), argsOf(output), !output?.output?.startsWith?.("ERROR"))
+      if (isMCP) recordRun(sessionID, tool.replace(MCP_TOOL_RE, ""), argsOf(output), !output?.output?.startsWith?.("ERROR"), textOf(output))
       const text = textOf(output)
       if (text) {
         const detected = detectCtf(text)
@@ -300,7 +303,7 @@ export const CtfMemory = async ({ client, $ }) => {
         const flag = matchFlag(text, ctfFor(sessionID))
         if (flag) {
           const runs = runsBySession.get(sessionID) ?? []
-          if (!runs.length && isMCP) recordRun(sessionID, tool.replace(MCP_TOOL_RE, ""), argsOf(output), true)
+          if (!runs.length && isMCP) recordRun(sessionID, tool.replace(MCP_TOOL_RE, ""), argsOf(output), true, textOf(output))
           await saveSolved(sessionID, flag, text, runsBySession.get(sessionID) ?? [])
         }
       }

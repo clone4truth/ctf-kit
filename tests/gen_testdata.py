@@ -116,4 +116,42 @@ if zip_bytes[:4] == b"PK\x03\x04":
     zip_bytes[6] |= 0x01
 open(os.path.join(TESTDATA_DIR, "pseudo.zip"), "wb").write(zip_bytes)
 
+# SQLite database with a flag
+import sqlite3
+db_file = os.path.join(TESTDATA_DIR, "flag.db")
+conn = sqlite3.connect(db_file)
+conn.execute("CREATE TABLE users (id INTEGER, username TEXT, secret TEXT)")
+conn.execute("INSERT INTO users VALUES (1, 'admin', 'flag{sqlite_reader_found}')")
+conn.execute("INSERT INTO users VALUES (2, 'guest', 'nothing here')")
+conn.commit()
+conn.close()
+
+# Minimal PDF with a compressed stream containing the flag
+pdf = bytearray(b"%PDF-1.4\n")
+objects = []
+objs = []
+# Object 1: Catalog
+objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+# Object 2: Pages
+objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+# Object 3: Page with a content stream
+objs.append(b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>\nendobj\n")
+secret = b"flag{pdf_stream_flag}"
+compressed = zlib.compress(b"BT /F1 24 Tf 50 100 Td (" + secret + b") Tj ET")
+objs.append(b"4 0 obj\n<< /Length " + str(len(compressed)).encode() + b" /Filter /FlateDecode >>\nstream\n" + compressed + b"\nendstream\nendobj\n")
+for o in objs:
+    pdf += o
+pdf += b"xref\n"
+off = 9
+offsets = [0]
+for o in objs:
+    offsets.append(off)
+    off += len(o)
+pdf += b"0 " + str(len(objs) + 1).encode() + b"\n"
+pdf += b"0000000000 65535 f \n"
+for i in range(1, len(objs) + 1):
+    pdf += f"{offsets[i]:010d} 00000 n \n".encode()
+pdf += b"trailer\n<< /Size " + str(len(objs) + 1).encode() + b" /Root 1 0 R >>\nstartxref\n" + str(off).encode() + b"\n%%EOF"
+open(os.path.join(TESTDATA_DIR, "mini.pdf"), "wb").write(bytes(pdf))
+
 print("testdata ready")

