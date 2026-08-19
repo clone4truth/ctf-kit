@@ -7,7 +7,7 @@ import urllib.parse
 import zlib
 
 from ..registry import tool
-from ..utils import b64, printable, from_b64
+from ..utils import b64, printable, from_b64, english_score
 
 
 @tool(category="encoding")
@@ -370,6 +370,63 @@ def _morse_try(data: str) -> bytes:
     if not re.fullmatch(r"[.\-\s]+", data):
         raise ValueError("not morse")
     return morse(data).encode()
+
+
+@tool(category="encoding")
+def decode_cascade(data: str, max_depth: int = 8) -> str:
+    """Auto peel repeated encodings (Ciphey-style): base64/hex/url/html/rot13/binary until text settles or a flag appears."""
+    rot13 = str.maketrans(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+        "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm")
+    current = data.strip()
+    seen = {current}
+    history = []
+    for step in range(1, max_depth + 1):
+        cands = []
+        try:
+            b = from_b64(current)
+            if b and b != current.encode():
+                cands.append(("base64", b.decode("latin-1")))
+        except Exception:
+            pass
+        try:
+            h = current.replace("0x", "").replace(" ", "").replace(",", "")
+            if re.fullmatch(r"[0-9a-fA-F]+", h) and len(h) % 2 == 0:
+                cands.append(("hex", bytes.fromhex(h).decode("latin-1")))
+        except Exception:
+            pass
+        if "%" in current:
+            cands.append(("url", urllib.parse.unquote(current)))
+        if "&" in current and ";" in current:
+            cands.append(("html", html.unescape(current)))
+        if re.search(r"[A-Za-z]", current):
+            _rot = current.translate(rot13)
+            if english_score(_rot.encode()) > english_score(current.encode()):
+                cands.append(("rot13", _rot))
+        if re.fullmatch(r"[01\s]+", current):
+            bits = current.replace(" ", "")
+            if len(bits) % 8 == 0:
+                cands.append(("binary", int(bits, 2).to_bytes(len(bits) // 8, "big").decode("latin-1")))
+        best = None
+        for name, cand in cands:
+            if cand == current or cand in seen:
+                continue
+            pr = sum(1 for ch in cand if ch.isprintable() or ch in "\n\r\t") / max(len(cand), 1)
+            if pr < 0.7:
+                continue
+            score = (10 if "flag" in cand.lower() else 0) + pr
+            if best is None or score > best[0]:
+                best = (score, name, cand)
+        if not best:
+            break
+        seen.add(best[2])
+        current = best[2].strip()
+        history.append(f"Step {step} [{best[1]}]: {current[:90]}")
+        if re.search(r"\b\w{2,}\{[^}\n]{2,}\}", current):
+            break
+    if not history:
+        return "No layered encoding detected."
+    return "\n".join(history) + f"\n\nFinal: {current}"
 
 
 def _zlib_try(data: bytes) -> bytes:

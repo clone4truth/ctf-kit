@@ -564,3 +564,29 @@ def hash_length_extension(original_data: str, append_data: str, original_hash: s
             f"Full Payload (hex) : {forged_data.hex()}\n"
             f"URL-Encoded Payload: {urllib.parse.quote(forged_data)}\n"
             f"Note: To compute the exact final hash, pass the internal state derived from {original_hash} into {alg} compressor.")
+
+
+@tool(category="crypto")
+def aes_gcm_nonce_reuse(ct1_hex: str, ct2_hex: str, pt1_hex: str = "") -> str:
+    """Recover plaintext when two AES-GCM messages reuse a nonce: ct1^ct2 = pt1^pt2. Provide one known plaintext to recover the other."""
+    try:
+        c1, c2 = from_hex(ct1_hex), from_hex(ct2_hex)
+    except Exception as ex:
+        return f"ERROR: invalid ciphertext hex: {ex}"
+    if not c1 or not c2:
+        return "ERROR: empty ciphertext."
+    n = min(len(c1), len(c2))
+    keystream = bytes(a ^ b for a, b in zip(c1[:n], c2[:n]))
+    out = [f"keystream (ct1^ct2): {keystream.hex()}"]
+    if pt1_hex.strip():
+        try:
+            p1 = from_hex(pt1_hex)
+        except Exception as ex:
+            return f"ERROR: invalid plaintext hex: {ex}"
+        m = min(n, len(p1))
+        p2 = bytes(k ^ x for k, x in zip(keystream[:m], p1[:m]))
+        out.append(f"recovered pt2 hex: {p2.hex()}")
+        out.append(f"recovered pt2 ascii: {printable(p2)}")
+    else:
+        out.append("pt1_hex empty: supply the known plaintext (hex) to recover the other message.")
+    return "\n".join(out)
