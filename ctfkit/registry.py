@@ -6,6 +6,7 @@ The registry is used by the MCP bridge (mcp_server.py) and the REST gateway
 """
 
 import json
+import threading
 import traceback
 from pathlib import Path
 import time
@@ -17,6 +18,7 @@ from .utils import tool_params
 TOOLS: dict[str, dict] = {}
 
 EXECUTION_LOG = Path(__file__).resolve().parent.parent / "memory" / "execution_log.json"
+_LOG_LOCK = threading.Lock()  # ponytail: global lock; shard per tool if concurrent load matters
 
 def _load_execution_log() -> dict:
     if EXECUTION_LOG.exists():
@@ -28,46 +30,47 @@ def _load_execution_log() -> dict:
 
 def _save_execution_log(data: dict):
     EXECUTION_LOG.parent.mkdir(parents=True, exist_ok=True)
-    EXECUTION_LOG.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    EXECUTION_LOG.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 def record_tool_execution(tool_name: str, success: bool, args: dict, duration: float, output_preview: str = "", context: str = ""):
-    data = _load_execution_log()
-    ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    
-    if tool_name not in data["runs"]:
-        data["runs"][tool_name] = {"total": 0, "success": 0, "failure": 0, "last_run": ""}
-    
-    data["runs"][tool_name]["total"] += 1
-    data["runs"][tool_name]["last_run"] = ts
-    
-    if success:
-        data["runs"][tool_name]["success"] += 1
-        if tool_name not in data["successes"]:
-            data["successes"][tool_name] = []
-        if context and len(data["successes"][tool_name]) < 50:
-            data["successes"][tool_name].append({
-                "time": ts, "context": context[:200], "output": output_preview[:200]
-            })
-    else:
-        data["runs"][tool_name]["failure"] += 1
-        if tool_name not in data["failures"]:
-            data["failures"][tool_name] = []
-        if len(data["failures"][tool_name]) < 50:
-            data["failures"][tool_name].append({
-                "time": ts, "args": {k: str(v)[:100] for k, v in args.items()}, "context": context[:200], "output": output_preview[:200]
-            })
-    
-    if context:
-        ctx_hash = context[:100].lower().strip()
-        if ctx_hash not in data["contexts"]:
-            data["contexts"][ctx_hash] = {"tools_tried": [], "successful": [], "failed": []}
-        if tool_name not in data["contexts"][ctx_hash]["tools_tried"]:
-            data["contexts"][ctx_hash]["tools_tried"].append(tool_name)
-        if tool_name not in data["contexts"][ctx_hash].get(("successful" if success else "failed"), []):
-            data["contexts"][ctx_hash].setdefault("successful" if success else "failed", [])
-            data["contexts"][ctx_hash]["successful" if success else "failed"].append(tool_name)
-    
-    _save_execution_log(data)
+    with _LOG_LOCK:
+        data = _load_execution_log()
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        if tool_name not in data["runs"]:
+            data["runs"][tool_name] = {"total": 0, "success": 0, "failure": 0, "last_run": ""}
+
+        data["runs"][tool_name]["total"] += 1
+        data["runs"][tool_name]["last_run"] = ts
+
+        if success:
+            data["runs"][tool_name]["success"] += 1
+            if tool_name not in data["successes"]:
+                data["successes"][tool_name] = []
+            if context and len(data["successes"][tool_name]) < 50:
+                data["successes"][tool_name].append({
+                    "time": ts, "context": context[:200], "output": output_preview[:200]
+                })
+        else:
+            data["runs"][tool_name]["failure"] += 1
+            if tool_name not in data["failures"]:
+                data["failures"][tool_name] = []
+            if len(data["failures"][tool_name]) < 50:
+                data["failures"][tool_name].append({
+                    "time": ts, "args": {k: str(v)[:100] for k, v in args.items()}, "context": context[:200], "output": output_preview[:200]
+                })
+
+        if context:
+            ctx_hash = context[:100].lower().strip()
+            if ctx_hash not in data["contexts"]:
+                data["contexts"][ctx_hash] = {"tools_tried": [], "successful": [], "failed": []}
+            if tool_name not in data["contexts"][ctx_hash]["tools_tried"]:
+                data["contexts"][ctx_hash]["tools_tried"].append(tool_name)
+            if tool_name not in data["contexts"][ctx_hash].get(("successful" if success else "failed"), []):
+                data["contexts"][ctx_hash].setdefault("successful" if success else "failed", [])
+                data["contexts"][ctx_hash]["successful" if success else "failed"].append(tool_name)
+
+        _save_execution_log(data)
 
 def get_tool_history(tool_name: str) -> dict:
     data = _load_execution_log()

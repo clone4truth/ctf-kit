@@ -103,6 +103,48 @@ def detect_type(data: bytes) -> str:
 
 _PARAM_DESC_RE = re.compile(r":param\s+(\w+)\s*:\s*([^\n]+)")
 
+_PARAM_GLOSSARY = {
+    "path": "input file path", "file": "input file path", "file_path": "input file path",
+    "image_path": "path to the image file", "gif_path": "path to the GIF file",
+    "pcap_path": "path to the pcap file", "zip_path": "path to the ZIP file",
+    "wav_path": "path to the WAV file", "binary_path": "path to the binary",
+    "out_path": "output file path", "out_dir": "output directory",
+    "data": "input data to process", "text": "input text", "input": "input data",
+    "data_hex": "hex-encoded input data", "block_hex": "hex-encoded cipher block",
+    "key": "secret key or password", "key_hex": "hex-encoded key", "key_length": "key length in bits",
+    "ciphertext": "ciphertext to decrypt", "ciphertexts_csv": "comma-separated ciphertexts",
+    "modulus": "RSA modulus n", "moduli": "RSA modulus n", "moduli_csv": "comma-separated RSA moduli",
+    "exponent": "RSA public exponent e", "n": "RSA modulus", "e": "RSA public exponent",
+    "d": "RSA private exponent", "p": "RSA prime p", "q": "RSA prime q",
+    "hash_str": "hash string to identify/analyze", "original_hash": "original hash value",
+    "encoded": "encoded string to decode", "secret": "secret value", "token": "token string",
+    "url": "target URL", "host": "target hostname or IP", "domain": "target domain",
+    "port": "target port", "remote_host": "remote hostname or IP", "remote_port": "remote port",
+    "wordlist": "path to wordlist file", "payload": "payload string",
+    "channel": "color channel (R/G/B/A)", "shift": "Caesar shift amount",
+    "rails": "number of rails for rail fence", "algorithm": "hash algorithm name",
+    "format": "output format", "mode": "cipher mode", "variant": "cipher variant",
+    "method": "HTTP method", "action": "action to perform", "query": "search query",
+    "limit": "maximum number of results", "timeout": "timeout in seconds",
+    "arch": "architecture (32/64)", "target_addr": "target address", "write_val": "value to write",
+    "code": "program/source code input", "ip": "IP address", "msg": "message to process",
+    "original": "original plaintext", "append_data": "data to append", "original_data": "original data",
+    "max_iter": "maximum iterations (control knob)", "states": "comma-separated states",
+    "states_csv": "comma-separated states", "header_json": "JWT header JSON", "payload_json": "JWT payload JSON",
+    "key_data_or_path": "key material or path to key file", "shell_type": "shell type (bash/sh/python)",
+}
+
+def _desc_fallback(name: str, jt: str, default) -> str:
+    """Derived description when a docstring has no :param entry."""
+    if name in _PARAM_GLOSSARY:
+        return _PARAM_GLOSSARY[name]
+    base = name.replace("_", " ").replace("csv", "(comma-separated)").strip()
+    if jt != "str":
+        base = f"{base} ({jt})"
+    if default is not None and not isinstance(default, bool):
+        base = f"{base} (default: {default})"
+    return base
+
 def tool_params(fn) -> list[dict]:
     """Extract params from signature + docstring param docs (if any)."""
     sig = inspect.signature(fn)
@@ -119,6 +161,6 @@ def tool_params(fn) -> list[dict]:
             "type": jt,
             "required": p.default is inspect.Parameter.empty,
             "default": None if p.default is inspect.Parameter.empty else p.default,
-            "desc": descs.get(name, "").strip(),
+            "desc": descs.get(name, "").strip() or _desc_fallback(name, jt, p.default),
         })
     return params
