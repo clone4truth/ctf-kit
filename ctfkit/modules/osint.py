@@ -101,3 +101,40 @@ def geohash_decode(geohash: str) -> str:
                 f"center: {lat_c:.6f}, {lon_c:.6f}")
     except ValueError:
         return f"ERROR: invalid geohash {geohash!r}"
+
+
+@tool(category="osint")
+def geocode(address: str = "", latitude: float = 0.0, longitude: float = 0.0) -> str:
+    """Forward/reverse geocoding via the public Nominatim (OpenStreetMap) API. Give an address to geocode, or lat+lon to reverse-locate.
+
+    :param address: place name / address to geocode (forward)
+    :param latitude: latitude for reverse lookup
+    :param longitude: longitude for reverse lookup
+    """
+    import json as _json
+    import urllib.parse as _up
+    import urllib.request as _ur
+    headers = {"User-Agent": "ctf-kit/1.0 (CTF tooling; contact: local)"}
+    try:
+        if address.strip():
+            url = "https://nominatim.openstreetmap.org/search?" + _up.urlencode(
+                {"q": address.strip(), "format": "json", "limit": 5})
+            with _ur.urlopen(_ur.Request(url, headers=headers), timeout=15) as r:
+                data = _json.loads(r.read().decode())
+            if not data:
+                return "No results."
+            return "\n".join(
+                f"{i + 1}. {e.get('display_name', '?')}  ->  {e.get('lat')}, {e.get('lon')}"
+                for i, e in enumerate(data))
+        if latitude or longitude:
+            url = "https://nominatim.openstreetmap.org/reverse?" + _up.urlencode(
+                {"lat": latitude, "lon": longitude, "format": "json", "zoom": 16})
+            with _ur.urlopen(_ur.Request(url, headers=headers), timeout=15) as r:
+                e = _json.loads(r.read().decode())
+            if not e or "error" in e:
+                return "No results."
+            return (f"{e.get('display_name', '?')}\n"
+                    f"lat {e.get('lat')}, lon {e.get('lon')}  (place: {e.get('name', '')})")
+        return "Provide an address, or latitude + longitude."
+    except Exception as ex:
+        return f"ERROR: {ex}"

@@ -1,9 +1,227 @@
 """Steganography: LSB/MSB bit-plane, metadata/EXIF, channel isolation, image XOR, PNG chunk dump, GIF frames."""
 
+import math
 import os
 
 from ..registry import tool
 from ..utils import printable
+
+_ZIGZAG = (
+    0, 1, 8, 16, 9, 2, 3, 10,
+    17, 24, 32, 25, 18, 11, 4, 5,
+    12, 19, 26, 33, 40, 48, 41, 34,
+    27, 20, 13, 6, 7, 14, 21, 28,
+    35, 42, 49, 56, 57, 50, 43, 36,
+    29, 22, 15, 23, 30, 37, 44, 51,
+    58, 59, 52, 45, 38, 31, 39, 46,
+    53, 60, 61, 54, 47, 55, 62, 63,
+)
+
+
+class _BitReader:
+    """MSB-first JPEG bit reader over an entropy-coded segment."""
+
+    def __init__(self, data: bytes):
+        self.data = data
+        self.pos = 0
+        self.acc = 0
+        self.nbits = 0
+        self.restart = False
+
+    def read(self, n: int) -> int:
+        while self.nbits < n:
+            if self.pos >= len(self.data):
+                self.acc = (self.acc << 8) | 0xFF
+                self.nbits += 8
+                continue
+            byte = self.data[self.pos]
+            self.pos += 1
+            if byte == 0xFF:
+                nxt = self.data[self.pos] if self.pos < len(self.data) else 0
+                if nxt == 0x00:
+                    self.pos += 1  # byte stuffing
+                elif 0xD0 <= nxt <= 0xD7:
+                    self.pos += 1
+                    self.acc = 0
+                    self.nbits = 0
+                    self.restart = True
+                    continue
+                # other markers mid-scan: leave for caller (end of segment)
+            self.acc = (self.acc << 8) | byte
+            self.nbits += 8
+        self.nbits -= n
+        return (self.acc >> self.nbits) & ((1 << n) - 1)
+
+
+def _build_huff(counts: bytes, symbols: bytes) -> dict:
+    """Canonical JPEG Huffman table: {(code, length): symbol}."""
+    table = {}
+    code = 0
+    k = 0
+    for i in range(16):
+        for _ in range(counts[i]):
+            table[(code, i + 1)] = symbols[k]
+            k += 1
+            code += 1
+        code <<= 1
+    return table
+
+
+def _huff_decode(reader: _BitReader, table: dict) -> int:
+    code = 0
+    for length in range(1, 17):
+        code = (code << 1) | reader.read(1)
+        sym = table.get((code, length))
+        if sym is not None:
+            return sym
+    return -1
+
+
+def _extend(value: int, size: int) -> int:
+    if size and value < (1 << (size - 1)):
+        value -= (1 << size) - 1
+    return value
+
+
+def _jpeg_coefficients(data: bytes) -> list:
+    """Decode quantized DCT coefficients (baseline sequential JPEG, 8-bit).
+    Returns list of (component_index, zigzag_coeffs[64]) per block, in MCU order,
+    with DC prediction applied and coefficient values EXACT (from the bitstream).
+    Raises ValueError on unsupported formats (progressive, 12-bit, lossless)."""
+    if not data.startswith(b"\xff\xd8"):
+        raise ValueError("not a JPEG (missing SOI)")
+    pos = 2
+    quant_tables = {}
+    huff = {}
+    width = height = 0
+    comps = []
+    restart_interval = 0
+    while pos < len(data):
+        if data[pos] != 0xFF:
+            pos += 1
+            continue
+        marker = data[pos + 1]
+        if marker == 0xD8 or 0xD0 <= marker <= 0xD7:
+            pos += 2
+            continue
+        if marker == 0xDA:  # SOS: start of scan
+            break
+        seg_len = (data[pos + 2] << 8) | data[pos + 3]
+        body = data[pos + 4:pos + 2 + seg_len]
+        if marker == 0xDB:  # DQT
+            i = 0
+            while i < len(body):
+                pq_tq = body[i]
+                i += 1
+                zig = list(body[i:i + 64])
+                i += 64
+                if pq_tq >> 4:  # 16-bit tables unsupported
+                    raise ValueError("16-bit quantization table unsupported")
+                flat = [0] * 64
+                for z, v in zip(_ZIGZAG, zig):
+                    flat[z] = v
+                quant_tables[pq_tq & 0x0F] = flat
+        elif marker == 0xC4:  # DHT
+            i = 0
+            while i < len(body):
+                tc_th = body[i]
+                i += 1
+                counts = body[i:i + 16]
+                i += 16
+                n = sum(counts)
+                syms = body[i:i + n]
+                i += n
+                huff[(tc_th >> 4, tc_th & 0x0F)] = _build_huff(counts, syms)
+        elif marker == 0xC0:  # SOF0 baseline
+            if body[0] != 8:
+                raise ValueError("only 8-bit baseline JPEG supported")
+            height = (body[1] << 8) | body[2]
+            width = (body[3] << 8) | body[4]
+            ncomp = body[5]
+            j = 6
+            for _ in range(ncomp):
+                cid = body[j]
+                h, v = body[j + 1] >> 4, body[j + 1] & 0x0F
+                tq = body[j + 2]
+                comps.append({"id": cid, "h": h, "v": v, "tq": tq})
+                j += 3
+        elif marker == 0xDD:  # DRI
+            restart_interval = (body[0] << 8) | body[1]
+        elif 0xC1 <= marker <= 0xCF or marker in (0xD9, 0xDC, 0xDE, 0xDF):
+            if marker in (0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                raise ValueError("only baseline sequential JPEG supported (found marker 0x%02X)" % marker)
+        pos += 2 + seg_len
+    if pos >= len(data) or data[pos] != 0xFF or data[pos + 1] != 0xDA:
+        raise ValueError("no SOS found")
+    seg_len = (data[pos + 2] << 8) | data[pos + 3]
+    sos = data[pos + 4:pos + 2 + seg_len]
+    ncomp = sos[0]
+    scan = {}
+    j = 1
+    for _ in range(ncomp):
+        cid = sos[j]
+        tdc, tac = sos[j + 1] >> 4, sos[j + 1] & 0x0F
+        scan[cid] = (tdc, tac)
+        j += 2
+    ss, se, ah_al = sos[j], sos[j + 1], sos[j + 2]
+    if ss != 0 or se != 63 or ah_al != 0:
+        raise ValueError("only full spectral selection (Ss=0, Se=63) supported")
+    scan_start = pos + 2 + seg_len
+    entropy = data[scan_start:]
+    # trim at EOI, keep stuffing bytes
+    eoi = entropy.find(b"\xff\xd9")
+    if eoi != -1:
+        entropy = entropy[:eoi]
+    reader = _BitReader(entropy)
+    max_h = max((c["h"] for c in comps), default=1)
+    max_v = max((c["v"] for c in comps), default=1)
+    mcu_w = (width + 8 * max_h - 1) // (8 * max_h)
+    mcu_h = (height + 8 * max_v - 1) // (8 * max_v)
+    total_mcus = mcu_w * mcu_h
+    blocks = []
+    pred = {cid: 0 for cid in scan}
+    mcu_count = 0
+    for mcu in range(total_mcus):
+        if restart_interval and mcu_count == restart_interval:
+            mcu_count = 0
+            for cid in pred:
+                pred[cid] = 0
+        for comp in comps:
+            if comp["id"] not in scan:
+                continue
+            tdc, tac = scan[comp["id"]]
+            dc_tab = huff.get((0, tdc))
+            ac_tab = huff.get((1, tac))
+            if dc_tab is None or ac_tab is None:
+                raise ValueError("missing Huffman table")
+            for _ in range(comp["h"] * comp["v"]):
+                coeffs = [0] * 64
+                dc_cat = _huff_decode(reader, dc_tab)
+                if dc_cat < 0:
+                    raise ValueError("bad DC Huffman code")
+                if dc_cat:
+                    coeffs[0] = pred[comp["id"]] + _extend(reader.read(dc_cat), dc_cat)
+                else:
+                    coeffs[0] = pred[comp["id"]]
+                pred[comp["id"]] = coeffs[0]
+                k = 1
+                while k < 64:
+                    rs = _huff_decode(reader, ac_tab)
+                    if rs < 0:
+                        raise ValueError("bad AC Huffman code")
+                    if rs == 0x00:  # EOB
+                        break
+                    run, size = rs >> 4, rs & 0x0F
+                    if run == 15 and size == 0:  # ZRL
+                        k += 16
+                        continue
+                    k += run
+                    if k < 64:
+                        coeffs[k] = _extend(reader.read(size), size)
+                        k += 1
+                blocks.append((comp["id"], coeffs))
+        mcu_count += 1
+    return blocks
 
 
 @tool(category="stego")
@@ -341,6 +559,46 @@ def stego_dtmf_detect(wav_path: str) -> str:
             q2 = q1
             q1 = q0
         return q1 * q1 + q2 * q2 - coeff * q1 * q2
+
+
+@tool(category="stego")
+def stego_jsteg(image_path: str, max_bytes: int = 512) -> str:
+    """Extract JSteg hidden data from a JPEG: LSBs of quantized DCT AC coefficients (luma plane, zigzag order, JSteg skip rule). Decodes the JPEG bitstream directly — exact coefficients.
+
+    :param image_path: path to the JPEG file
+    :param max_bytes: max bytes to extract
+    """
+    try:
+        with open(image_path, "rb") as f:
+            data = f.read()
+    except OSError as ex:
+        return f"ERROR: {ex}"
+    try:
+        blocks = _jpeg_coefficients(data)
+    except ValueError as ex:
+        return f"ERROR: {ex}"
+    bits = []
+    for cid, coeffs in blocks:
+        if cid != 1:  # component 1 = luma (JPEG component numbering starts at 1)
+            continue
+        for c in coeffs[1:]:  # AC only, zigzag order (entropy order = zigzag)
+            if abs(c) <= 1:
+                continue
+            bits.append(c & 1)
+    out = bytearray()
+    for i in range(0, len(bits) - 7, 8):
+        byte = 0
+        for b in bits[i:i + 8]:
+            byte = (byte << 1) | b
+        out.append(byte)
+    if max_bytes:
+        out = out[:max_bytes]
+    text = printable(bytes(out), 400)
+    has_flag = "flag{" in text.lower() or "ctf{" in text.lower()
+    return (f"total {len(out)} bytes ({len(bits)} usable coefficients)\n"
+            f"hex (first 400): {bytes(out[:400]).hex()}\n"
+            f"ascii (first 400): {text}"
+            + ("\n[!] Looks like embedded data (flag pattern found)" if has_flag else ""))
     
     chunk_size = int(framerate * 0.04)  # 40ms window
     decoded = []
