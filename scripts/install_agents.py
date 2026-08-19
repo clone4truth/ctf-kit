@@ -2,14 +2,17 @@
 
 Installs idempotently (safe to run on every MCP server start):
 
-  1. ctf-memory.js plugin        -> ~/.config/opencode/plugins/ctf-memory.js
-     + registered in ~/.config/opencode/opencode.json (mcp + plugin array)
-  2. 'ctf-tools' MCP server       -> registered in every agent CLI config found:
-     - Claude Code   ~/.claude.json                       (mcpServers)
-     - Cursor        ~/.cursor/mcp.json                   (mcpServers)
-     - Gemini CLI    ~/.gemini/settings.json              (mcpServers)
-     - Windsurf      ~/.codeium/windsurf/mcp_config.json  (mcpServers)
-     - opencode      ~/.config/opencode/opencode.json     (mcp)
+   1. ctf-memory.js plugin        -> ~/.config/opencode/plugins/ctf-memory.js
+      + registered in ~/.config/opencode/opencode.json (mcp + plugin array)
+   2. 'ctf-tools' MCP server       -> registered in every agent CLI config found:
+      - Claude Code   ~/.claude.json                       (mcpServers)
+      - Cursor        ~/.cursor/mcp.json                   (mcpServers)
+      - Gemini CLI    ~/.gemini/settings.json              (mcpServers)
+      - Windsurf      ~/.codeium/windsurf/mcp_config.json  (mcpServers)
+      - opencode      ~/.config/opencode/opencode.json     (mcp)
+   3. bundled skills (skills/*/SKILL.md) -> ~/.agents/skills/ and ~/.claude/skills/
+      (opencode + Claude Code auto-load them by description; AI & LLM Security
+      skill activates whenever an LLM-security task appears)
 
 Existing entries in every target config are preserved; missing configs are skipped.
 
@@ -26,6 +29,9 @@ OPENCODE_DIR = Path.home() / ".config" / "opencode"
 PLUGIN_SRC = REPO / "plugins" / "ctf-memory.js"
 PLUGIN_DST = OPENCODE_DIR / "plugins" / "ctf-memory.js"
 PLUGIN_REF = "./plugins/ctf-memory.js"
+
+SKILLS_SRC = REPO / "skills"
+SKILL_DST_DIRS = [Path.home() / ".agents" / "skills", Path.home() / ".claude" / "skills"]
 
 _VENV_PY = REPO / (".venv/Scripts/python.exe" if sys.platform == "win32" else ".venv/bin/python")
 PY = str(_VENV_PY if _VENV_PY.exists() else sys.executable)
@@ -61,6 +67,20 @@ def _merge_mcp(path: Path, key: str, entry: dict) -> str:
     return "registered"
 
 
+def _install_skills() -> list[str]:
+    """Copy bundled skills (skills/*/SKILL.md) into every agent skill dir (idempotent)."""
+    report = []
+    for skill_dir in sorted(SKILLS_SRC.glob("*/")):
+        if not (skill_dir / "SKILL.md").exists():
+            continue
+        for dst_root in SKILL_DST_DIRS:
+            dst = dst_root / skill_dir.name / "SKILL.md"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(skill_dir / "SKILL.md", dst)
+            report.append(f"[skills] {skill_dir.name} -> {dst}")
+    return report
+
+
 def install() -> list[str]:
     report = []
     if OPENCODE_DIR.is_dir():
@@ -68,6 +88,7 @@ def install() -> list[str]:
         if PLUGIN_SRC.exists():
             shutil.copy2(PLUGIN_SRC, PLUGIN_DST)
             report.append(f"[opencode] plugin installed -> {PLUGIN_DST}")
+    report.extend(_install_skills())
     for label, path, key, entry in TARGETS:
         report.append(f"[{label}] {SERVER_NAME}: {_merge_mcp(path, key, entry)} ({path})")
     return report

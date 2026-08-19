@@ -47,6 +47,11 @@ CLI tool wrappers per category (nmap, ffuf, sqlmap, binwalk, steghide, hashcat..
 - `memory/*.md` — one file per challenge (status, tools, flag, lessons).
 - Skills auto-generate to `~/.agents/skills/ctf-*` and `~/.claude/skills/ctf-*`
   (loaded by opencode and Claude Code on next start).
+- Bundled skills in `skills/<name>/SKILL.md` (e.g. `16-ai-llm-security`) sync to
+  `~/.agents/skills/` + `~/.claude/skills/` on every MCP server start
+  (`scripts/install_agents.py`, hooked in `mcp_server.py main()`), so any provider
+  running the ctf-tools server gets them automatically; agents auto-load them by
+  description when a matching task appears.
 - Recall: `recall_knowledge` (MCP) / `scripts/recall.py`; Save: `remember_challenge` (MCP) / `scripts/remember.py`.
 
 ## Testing & validation
