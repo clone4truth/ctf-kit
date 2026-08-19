@@ -12,7 +12,7 @@
 
 # CTF KIT — AI-Powered Security & CTF Engine
 
-**Modular cybersecurity toolkit covering 115 specialized tools across 9 categories.**  
+**Modular cybersecurity toolkit covering 123 specialized tools across 9 categories.**  
 *Designed specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot) via MCP & Headless REST API.*
 
 </div>
@@ -42,21 +42,21 @@ graph TB
         LOG["📊 <b>Telemetry & Dashboard</b><br/>Rich Live UI • Execution Timers • Status Monitor"]
     end
 
-    subgraph SecurityModules ["🛠️ 115 Specialized Security Tools (9 Categories)"]
+    subgraph SecurityModules ["🛠️ 123 Specialized Security Tools (9 Categories)"]
         direction TB
         subgraph TopCat [" "]
             M1["🔤 <b>Encoding</b> (13)<br/><code>POST /api/encoding/*</code>"]
-            M2["🔐 <b>Crypto</b> (32)<br/><code>POST /api/crypto/*</code>"]
+            M2["🔐 <b>Crypto</b> (36)<br/><code>POST /api/crypto/*</code>"]
             M3["🖼️ <b>Stego</b> (11)<br/><code>POST /api/stego/*</code>"]
         end
         subgraph MidCat [" "]
-            M4["🔍 <b>Forensics</b> (12)<br/><code>POST /api/forensics/*</code>"]
-            M5["🌐 <b>Web</b> (18)<br/><code>POST /api/web/*</code>"]
+            M4["🔍 <b>Forensics</b> (13)<br/><code>POST /api/forensics/*</code>"]
+            M5["🌐 <b>Web</b> (20)<br/><code>POST /api/web/*</code>"]
             M6["⚙️ <b>Reverse</b> (4)<br/><code>POST /api/rev/*</code>"]
         end
         subgraph BotCat [" "]
             M7["💥 <b>Pwn</b> (8)<br/><code>POST /api/pwn/*</code>"]
-            M8["🛰️ <b>OSINT</b> (4)<br/><code>POST /api/osint/*</code>"]
+            M8["🛰️ <b>OSINT</b> (5)<br/><code>POST /api/osint/*</code>"]
             M9["🎯 <b>Misc & Memory</b> (13)<br/><code>POST /api/misc/*</code>"]
         end
     end
@@ -158,7 +158,7 @@ pip install -r requirements.txt
 # 1. Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
 python tests/gen_testdata.py
 
-# 2. Run smoke tests (verify all 115 tools)
+# 2. Run smoke tests (verify all 123 tools)
 python tests/test_smoke.py
 
 # 3. Verify MCP stdio JSON-RPC handshake
@@ -176,6 +176,11 @@ python server.py
 * **Swagger UI Documentation:** [http://localhost:8765/docs](http://localhost:8765/docs)
 * **ReDoc Interface:** [http://localhost:8765/redoc](http://localhost:8765/redoc)
 * **Telemetry & Health Endpoint:** [http://localhost:8765/health](http://localhost:8765/health)
+* **Tool Explorer Dashboard:** [http://localhost:8765/dashboard](http://localhost:8765/dashboard)
+
+> **Auth (optional):** set `CTFKIT_API_TOKEN=...` → all `/api/*` calls require `Authorization: Bearer <token>`.
+> **External tools:** missing CLIs auto-try a Kali Docker container (`CTFKIT_DOCKER=0` disables, `CTFKIT_DOCKER_IMAGE` overrides the image, `CTFKIT_DOCKER_PULL=1` auto-pulls).
+> **LLM steering (autonomous_solve):** set `CTFKIT_LLM_ENDPOINT` (+ optional `CTFKIT_LLM_MODEL`, `CTFKIT_LLM_KEY`) to an OpenAI-compatible chat endpoint; any failure falls back to the heuristic.
 
 ### 🔌 2. Run Headless MCP Server (for AI Agents)
 ```bash
@@ -228,7 +233,7 @@ CTF KIT features a persistent knowledge loop that turns every solved challenge o
 [Challenge / Lab Input]
         │
         ├──▶ 1. Plan & Recall  : recall_knowledge / scripts/recall.py (Search past memory)
-        ├──▶ 2. Solve          : Execute via 115 MCP Tools
+        ├──▶ 2. Solve          : Execute via 123 MCP Tools
         └──▶ 3. Remember       : remember_challenge / scripts/remember.py
                   │
                   ├──▶ memory/*.md                  (Indexed Challenge Memory)
@@ -249,19 +254,19 @@ python scripts/remember.py --title "RSA Fermat Factorization" --category crypto 
 
 ---
 
-## 🧰 Complete Tool Arsenal (115 Tools across 9 Categories)
+## 🧰 Complete Tool Arsenal (123 Tools across 9 Categories)
 
 | Category | Count | Tools & Descriptions |
 |---|---|---|
 | **encoding** | 13 | `decode_base` (Base2/8/16/32/36/58/62/64/85), `decode_base45`, `decode_base91`, `decode_chain` (auto-unpacker multi-layer), `decode_cascade` (Ciphey-style auto peel base64/hex/url/html/rot13/binary), `decode_zero_width`, `encode_zero_width`, `encode_url`, `encode_html_entities`, `encode_unicode_escapes`, `morse`, `brainfuck`, `decode_all` |
-| **crypto** | 32 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `aes_gcm_nonce_reuse` (nonce-reuse plaintext recovery), `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill` 2x2, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common`, `external_crypto` (hashcat/john wrapper) |
+| **crypto** | 36 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `aes_gcm_nonce_reuse` (nonce-reuse plaintext recovery), `ecc_point_ops` (GF(p) point arithmetic), `ecc_bsgs` (baby-step giant-step discrete log), `paillier_keygen`, `paillier_decrypt` (homomorphic crypto), `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill` 2x2, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common`, `external_crypto` (hashcat/john wrapper) |
 | **stego** | 11 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB extraction), `stego_dtmf_detect` (keypad tones), `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare`, `external_stego` (steghide/zsteg/outguess wrapper) |
-| **forensics** | 12 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map`, `external_forensics` (binwalk/exiftool/foremost/volatility3 wrapper) |
-| **web** | 18 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `sqli_payloads`, `command_injection_payloads`, `path_traversal_payloads`, `xxe_payloads`, `idor_payloads`, `deserialization_payloads`, `file_upload_bypass`, `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers), `external_web` (ffuf/gobuster/sqlmap/nikto/wfuzz wrapper) |
+| **forensics** | 13 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map`, `ntfs_ads` (ADS listing, Windows `dir /R` / Linux getfattr), `external_forensics` (binwalk/exiftool/foremost/volatility3 wrapper) |
+| **web** | 20 | `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `sqli_payloads`, `command_injection_payloads`, `path_traversal_payloads`, `xxe_payloads`, `idor_payloads`, `deserialization_payloads`, `graphql_introspect` (schema dump), `oast_payload` (out-of-band callback templates: XXE/SSRF/SSTI/SQLi/Log4Shell), `file_upload_bypass`, `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers), `external_web` (ffuf/gobuster/sqlmap/nikto/wfuzz wrapper) |
 | **rev** | 4 | `pe_info` (Windows PE32/PE32+ mitigations & sections), `elf_info` (Linux ELF header & symbols), `pyc_magic_info` (Python bytecode version identifier), `external_rev` (objdump/readelf/radare2/one_gadget wrapper) |
 | **pwn** | 8 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools exploit scaffolding), `shellcode_multi` (Linux x86/x64, Win x86/x64, ARM), `shellcode_x64`, `debruijn`, `debruijn_find` |
-| **osint** | 4 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (Certificate Transparency logs), `external_recon` (nmap/masscan/whatweb/dnsrecon wrapper) |
-| **misc** | 13 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection), `analyze_target` + `select_tools` + `optimize_parameters` (decision engine), `scaffold_new_tool` (auto-registering tool scaffolding), `autonomous_solve` (self-driving agent: external-first strategy, live progress bars), `get_agent_status`, `reset_agent_memory`, `external_available` (installed external tools report) |
+| **osint** | 5 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (Certificate Transparency logs), `geohash_decode` (bounds + center + box), `external_recon` (nmap/masscan/whatweb/dnsrecon wrapper) |
+| **misc** | 13 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection), `analyze_target` + `select_tools` + `optimize_parameters` (decision engine), `scaffold_new_tool` (auto-registering tool scaffolding), `autonomous_solve` (self-driving agent: external-first strategy, live progress bars, optional LLM steering via `CTFKIT_LLM_*` env), `get_agent_status`, `reset_agent_memory`, `external_available` (installed external tools report) |
 
 ---
 
@@ -281,10 +286,11 @@ ctf-kit/
 │   ├── test_smoke.py       # 101 smoke tests covering all tools
 │   ├── test_mcp.py         # MCP JSON-RPC stdio handshake & protocol test
 │   └── test_agent_categories.py  # 16 agent strategy/comprehension/e2e tests (CTF_E2E=0 skips e2e)
-├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool, writeup, install_agents)
+├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool, writeup, install_agents, add_param_docs, build)
 ├── plugins/                # ctf-memory.js (auto-installed into all agent CLI configs by scripts/install_agents.py)
 ├── skills/                 # bundled agent skills (e.g. 16-ai-llm-security) — auto-synced to ~/.agents/skills + ~/.claude/skills
-├── server.py               # Main Central Gateway (FastAPI / Uvicorn + Swagger docs at /docs)
+├── .github/workflows/      # CI: smoke + MCP + agent category tests on push
+├── server.py               # Main Central Gateway (FastAPI / Uvicorn + Swagger docs at /docs, auth via CTFKIT_API_TOKEN)
 ├── mcp_server.py           # Headless MCP stdio server & Gateway Bridge (per-tool schemas)
 ├── memory/                 # per-challenge persistent memory + _index.md + execution log + agent state
 ├── testdata/               # synthetic demo assets (regenerated via tests/gen_testdata.py)
@@ -299,7 +305,9 @@ ctf-kit/
 
 - `rsa_decrypt` automatically falls back through raw plaintext, PKCS1v15, and OAEP.
 - `aes_crypt` automatically attempts PKCS7 and unpadded decryption for ECB/CBC.
-- `stego_lsb` supports custom bit planes (LSB/MSB) and configurable bit extraction order.
+- `stego_lsb` supports custom bit planes (LSB/MSB) and configurable bit extraction order (bytes-based, no numpy).
+- Standalone builds: `python scripts/build.py` → PyInstaller onefile `dist/ctfkit_api.exe` + `dist/ctfkit_mcp.exe`.
+- Source-level `:param` docs auto-fillable via `python scripts/add_param_docs.py --write`.
 - `pcap_http` contains a lightweight, zero-dependency parser for Ethernet/IPv4/TCP streams.
 - Synthetic demo test assets are located in `testdata/` (regenerated via `python tests/gen_testdata.py`).
 - **Decision Engine**: `POST /api/intelligence/{analyze-target,select-tools,optimize-parameters}` — category detection, keyword-ranked tool recommendation, and parameter contracts from the registry.

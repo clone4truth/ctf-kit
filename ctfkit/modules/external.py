@@ -6,6 +6,7 @@ On Linux, tools without a specific installer fall back to `apt-get install -y <n
 Output is truncated to keep MCP/API responses small; never invented results.
 """
 
+import os
 import re
 import shlex
 import shutil
@@ -365,6 +366,33 @@ def _find_exe(name: str) -> str | None:
     return None
 
 
+def _split_args(args: str) -> list[str]:
+    """shlex with real quoting (gdb -ex '...' / r2 -c '...' keep groups).
+    Windows: normalize backslashes so posix parsing doesn't eat them."""
+    raw = args.replace("\\", "/") if sys.platform == "win32" else args
+    return shlex.split(raw, posix=True)
+
+
+def _docker_prefix() -> list[str] | None:
+    """Run missing tools via a Kali container when Docker is available.
+    Disable with CTFKIT_DOCKER=0; auto-pull with CTFKIT_DOCKER_PULL=1."""
+    if os.environ.get("CTFKIT_DOCKER", "1") == "0":
+        return None
+    docker = shutil.which("docker")
+    if not docker:
+        return None
+    img = os.environ.get("CTFKIT_DOCKER_IMAGE", "kalilinux/kali-rolling")
+    try:
+        inspect = subprocess.run([docker, "image", "inspect", img], capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return None
+    if inspect.returncode != 0:
+        if os.environ.get("CTFKIT_DOCKER_PULL") != "1":
+            return None
+        subprocess.run([docker, "pull", img], capture_output=True, timeout=600)
+    return [docker, "run", "--rm", "-v", f"{os.getcwd()}:/work", "-w", "/work", img]
+
+
 def _auto_install(name: str, timeout: int = _INSTALL_TIMEOUT) -> str:
     cmd = INSTALL_CMD.get(name, {}).get(sys.platform)
     if not cmd and sys.platform.startswith("linux"):
@@ -427,20 +455,25 @@ _PROGRESS_LOCK = threading.Lock()
 
 
 def _run_external(name: str, args: str, timeout: int, auto: bool) -> str:
-    if not _find_exe(name):
+    exe = _find_exe(name)
+    install_report = ""
+    if not exe:
         if auto:
             install_report = _auto_install(name, timeout=min(int(timeout), _INSTALL_TIMEOUT))
-            if not _find_exe(name):
-                return install_report + " - result requires testing after manual install."
-        else:
-            return (f"TOOL '{name}' NOT INSTALLED (hint: {HINT.get(name, 'apt install ' + name)}). "
-                    "Result requires testing on a system with the tool.")
+            exe = _find_exe(name)
+    prefix = None
+    if not exe:
+        prefix = _docker_prefix()
+    if not exe and not prefix:
+        if auto:
+            return install_report + " - result requires testing after manual install."
+        return (f"TOOL '{name}' NOT INSTALLED (hint: {HINT.get(name, 'apt install ' + name)}). "
+                "Result requires testing on a system with the tool.")
     import queue as _q
     import time as _time
-    exe = _find_exe(name)
     started = _time.time()
     try:
-        cmd = [exe, *[t.strip("'\"") for t in shlex.split(args, posix=False)]]
+        cmd = [*prefix, name, *_split_args(args)] if prefix else [exe, *_split_args(args)]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
     except OSError:
@@ -453,7 +486,8 @@ def _run_external(name: str, args: str, timeout: int, auto: bool) -> str:
         concurrent = _PROGRESS_COUNTS[name]
     label = name if concurrent == 1 else f"{name}#{seq}"
     key = f"{name}#{seq}"  # unique per invocation -> parallel runs get own rows
-    log.info("▶ [external] %s: %s %s", label, name, args,
+    where = "(docker)" if prefix else ""
+    log.info("▶ [external] %s %s: %s %s", label, where, name, args,
              extra={"progress": True, "progress_key": key})
 
     try:
@@ -538,37 +572,67 @@ def _wrapper(category: str, tool_name: str, args: str, timeout: int, auto: bool)
 
 @tool(category="osint")
 def external_recon(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external recon/network tool: nmap, masscan, whatweb, dnsrecon, subfinder, amass, ... Missing tool is auto-installed when auto=True."""
+    """Run an external recon/network tool: nmap, masscan, whatweb, dnsrecon, subfinder, amass, ... Missing tool is auto-installed when auto=True.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("osint", tool, args, timeout, auto)
 
 
 @tool(category="web")
 def external_web(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external web tool: nmap, gobuster, ffuf, sqlmap, nikto, wfuzz, dirsearch, ... Missing tool is auto-installed when auto=True."""
+    """Run an external web tool: nmap, gobuster, ffuf, sqlmap, nikto, wfuzz, dirsearch, ... Missing tool is auto-installed when auto=True.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("web", tool, args, timeout, auto)
 
 
 @tool(category="forensics")
 def external_forensics(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external forensics tool: binwalk, exiftool, foremost, tshark, volatility3, ... Auto-installs when missing."""
+    """Run an external forensics tool: binwalk, exiftool, foremost, tshark, volatility3, ... Auto-installs when missing.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("forensics", tool, args, timeout, auto)
 
 
 @tool(category="stego")
 def external_stego(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external stego tool: steghide, zsteg, outguess, stegseek, pngcheck, zbarimg, ... Missing tool is auto-installed when auto=True."""
+    """Run an external stego tool: steghide, zsteg, outguess, stegseek, pngcheck, zbarimg, ... Missing tool is auto-installed when auto=True.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("stego", tool, args, timeout, auto)
 
 
 @tool(category="crypto")
 def external_crypto(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external crypto tool: hashcat, john, hashid, xortool, RsaCtfTool, ... Missing tool is auto-installed when auto=True."""
+    """Run an external crypto tool: hashcat, john, hashid, xortool, RsaCtfTool, ... Missing tool is auto-installed when auto=True.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("crypto", tool, args, timeout, auto)
 
 
 @tool(category="rev")
 def external_rev(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external rev tool: objdump, readelf, r2, gdb, ROPgadget, upx, checksec, ... Missing tool is auto-installed when auto=True."""
+    """Run an external rev tool: objdump, readelf, r2, gdb, ROPgadget, upx, checksec, ... Missing tool is auto-installed when auto=True.
+    :param args: args
+    :param auto: auto
+    :param timeout: timeout in seconds
+    :param tool: tool
+    """
     return _wrapper("rev", tool, args, timeout, auto)
 
 

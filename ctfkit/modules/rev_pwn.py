@@ -42,7 +42,9 @@ def _elf_parse(data: bytes) -> dict:
 
 @tool(category="rev")
 def elf_info(path: str) -> str:
-    """Basic ELF info: class, endianness, machine, entry point, phdr/shdr counts."""
+    """Basic ELF info: class, endianness, machine, entry point, phdr/shdr counts.
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     info = _elf_parse(data)
     if not info:
@@ -79,7 +81,9 @@ def _phdrs(data: bytes, info: dict) -> list[dict]:
 
 @tool(category="pwn")
 def checksec(path: str) -> str:
-    """Binary mitigations: NX, PIE, RELRO, Stack Canary, Fortify (pwntools checksec-like)."""
+    """Binary mitigations: NX, PIE, RELRO, Stack Canary, Fortify (pwntools checksec-like).
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     info = _elf_parse(data)
     if not info:
@@ -129,7 +133,10 @@ _ROP_PATTERNS = {
 
 @tool(category="pwn")
 def rop_gadgets(path: str, pattern: str = "") -> str:
-    """Find common ROP gadgets (x86-64) in executable ELF segments. pattern: gadget name (e.g. 'pop rdi') or empty = all."""
+    """Find common ROP gadgets (x86-64) in executable ELF segments. pattern: gadget name (e.g. 'pop rdi') or empty = all.
+    :param pattern: pattern
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     info = _elf_parse(data)
     if not info:
@@ -159,7 +166,10 @@ _X64_NULLFREE = bytes.fromhex(
 
 @tool(category="pwn")
 def shellcode_x64(kind: str = "execve_sh", xor_key: str = "0xaa") -> str:
-    """Ready-made x86_64 shellcode. kind: execve_sh (null-free, 25 bytes) / xor (XOR-encrypted variant with key)."""
+    """Ready-made x86_64 shellcode. kind: execve_sh (null-free, 25 bytes) / xor (XOR-encrypted variant with key).
+    :param kind: kind
+    :param xor_key: xor key
+    """
     sc = _X64_NULLFREE
     if kind == "execve_sh":
         return (f"execve('/bin/sh', NULL, NULL) null-free ({len(sc)} bytes):\n"
@@ -245,7 +255,9 @@ def _deb_gen():
 
 @tool(category="pwn")
 def debruijn(length: int = 1000) -> str:
-    """Generate a de Bruijn pattern to find the overflow offset."""
+    """Generate a de Bruijn pattern to find the overflow offset.
+    :param length: length
+    """
     if length > 5_000_000:
         return "Limit is 5 million characters."
     return "".join(_DEBRUIJN_ALPHA[i] for i in itertools.islice(_deb_gen(), length))
@@ -253,7 +265,9 @@ def debruijn(length: int = 1000) -> str:
 
 @tool(category="pwn")
 def debruijn_find(substring: str) -> str:
-    """Find the offset of a de Bruijn substring (from core dump / crash output)."""
+    """Find the offset of a de Bruijn substring (from core dump / crash output).
+    :param substring: substring
+    """
     if len(substring) < 4:
         return "Substring must be at least 4 characters (pattern length)."
     window = []
@@ -270,7 +284,9 @@ def debruijn_find(substring: str) -> str:
 
 @tool(category="rev")
 def pe_info(path: str) -> str:
-    """Analyze Windows PE/PE32+ (EXE/DLL/SYS): headers, machine, entry point, sections, and mitigations (ASLR, DEP, CFG)."""
+    """Analyze Windows PE/PE32+ (EXE/DLL/SYS): headers, machine, entry point, sections, and mitigations (ASLR, DEP, CFG).
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     if not data.startswith(b"MZ") or len(data) < 64:
         return "Not a valid DOS/PE file (missing 'MZ' header)."
@@ -356,7 +372,12 @@ def pe_info(path: str) -> str:
 
 @tool(category="pwn")
 def fmtstr_payload_gen(offset: int, target_addr: str, write_val: str, arch: str = "64") -> str:
-    """Generate Format String arbitrary write payload (%<val>c%<idx>$n / %hn) and memory leak templates."""
+    """Generate Format String arbitrary write payload (%<val>c%<idx>$n / %hn) and memory leak templates.
+    :param offset: offset
+    :param arch: architecture (32/64)
+    :param target_addr: target address
+    :param write_val: value to write
+    """
     addr = int(target_addr, 0)
     val = int(write_val, 0)
     is64 = "64" in arch
@@ -392,7 +413,11 @@ def fmtstr_payload_gen(offset: int, target_addr: str, write_val: str, arch: str 
 
 @tool(category="pwn")
 def pwn_template(binary_path: str = "./vuln", remote_host: str = "chall.ctf.org", remote_port: int = 1337) -> str:
-    """Generate a clean, production-ready Python pwntools solve script template."""
+    """Generate a clean, production-ready Python pwntools solve script template.
+    :param remote_port: remote port
+    :param binary_path: path to the binary
+    :param remote_host: remote hostname or IP
+    """
     script = f'''#!/usr/bin/env python3
 from pwn import *
 
@@ -449,7 +474,9 @@ io.interactive()
 
 @tool(category="rev")
 def pyc_magic_info(pyc_path_or_hex: str) -> str:
-    """Identify Python version from .pyc magic bytes and inspect bytecode header."""
+    """Identify Python version from .pyc magic bytes and inspect bytecode header.
+    :param pyc_path_or_hex: pyc path or hex
+    """
     import os
     
     MAGIC_TABLE = {
@@ -491,7 +518,10 @@ def pyc_magic_info(pyc_path_or_hex: str) -> str:
 
 @tool(category="pwn")
 def shellcode_multi(arch: str = "x64", kind: str = "execve_sh") -> str:
-    """Multi-architecture shellcode library (Linux x64, x86 32-bit, ARM32, AArch64, Windows x64)."""
+    """Multi-architecture shellcode library (Linux x64, x86 32-bit, ARM32, AArch64, Windows x64).
+    :param arch: architecture (32/64)
+    :param kind: kind
+    """
     SHELLCODES = {
         "x64": {
             "name": "Linux x86-64 execve('/bin/sh', NULL, NULL) null-free",

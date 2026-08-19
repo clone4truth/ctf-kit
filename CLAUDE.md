@@ -2,7 +2,7 @@
 
 @memory/_index.md
 
-CTF toolkit: 115 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+CTF toolkit: 123 tools (encoding, crypto, stego, forensics, web, rev, pwn,
 osint, misc) as an MCP server (`ctf-tools`, registered in `.mcp.json`) plus a REST
 API server (`server.py`) with Swagger UI at `/docs`.
 

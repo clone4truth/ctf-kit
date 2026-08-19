@@ -29,6 +29,13 @@ def _load_execution_log() -> dict:
     return {"runs": {}, "failures": {}, "successes": {}, "contexts": {}}
 
 def _save_execution_log(data: dict):
+    # rotation: cap per-tool history and context entries so the file never grows unbounded
+    for arr in (data.get("successes", {}), data.get("failures", {})):
+        for key in list(arr):
+            arr[key] = arr[key][-20:]
+    ctx = data.get("contexts", {})
+    if len(ctx) > 400:
+        data["contexts"] = {k: v for k, v in list(ctx.items())[-400:]}
     EXECUTION_LOG.parent.mkdir(parents=True, exist_ok=True)
     EXECUTION_LOG.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
@@ -155,8 +162,10 @@ def run_tool(name: str, args: dict) -> str:
         elif expected_type in ("bool", "boolean") and isinstance(v, str):
             sig_args[k] = v.lower() in ("1", "true", "yes", "y")
 
-    if "path" in sig_args and isinstance(sig_args["path"], str):
-        sig_args["path"] = sig_args["path"].replace("\\", "/")
+    for k, v in list(sig_args.items()):
+        # OS-agnostic: Windows backslashes break Linux-run tools — normalize every path-like arg
+        if (k.endswith("path") or k == "file") and isinstance(v, str):
+            sig_args[k] = v.replace("\\", "/")
 
     cached = cache_get(name, sig_args) if name not in _NO_CACHE else None
     if cached is not None:

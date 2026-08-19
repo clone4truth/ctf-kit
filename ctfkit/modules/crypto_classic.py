@@ -16,7 +16,10 @@ def _clean(text: str) -> str:
 
 @tool(category="crypto")
 def caesar(text: str, shift: int = -1) -> str:
-    """Caesar shift. shift=-1 (default) = brute force all 25, ranked by English score."""
+    """Caesar shift. shift=-1 (default) = brute force all 25, ranked by English score.
+    :param text: input text
+    :param shift: Caesar shift amount
+    """
     if shift < 0:
         results = []
         for s in range(26):
@@ -33,7 +36,9 @@ def caesar(text: str, shift: int = -1) -> str:
 
 @tool(category="crypto")
 def atbash(text: str) -> str:
-    """Atbash (A<->Z). Symmetric."""
+    """Atbash (A<->Z). Symmetric.
+    :param text: input text
+    """
     return "".join(chr(155 - ord(c)) if "A" <= c <= "Z"
                    else chr(219 - ord(c)) if "a" <= c <= "z" else c
                    for c in text)
@@ -41,7 +46,11 @@ def atbash(text: str) -> str:
 
 @tool(category="crypto")
 def affine(text: str, a: int = -1, b: int = 0) -> str:
-    """Affine cipher decrypt: plain = a^-1 * (c - b) mod 26. a=-1 = brute force all valid (a,b)."""
+    """Affine cipher decrypt: plain = a^-1 * (c - b) mod 26. a=-1 = brute force all valid (a,b).
+    :param a: a
+    :param text: input text
+    :param b: b
+    """
     def decrypt_one(ct, aa, bb):
         try:
             inv = pow(aa, -1, 26)
@@ -67,7 +76,11 @@ def affine(text: str, a: int = -1, b: int = 0) -> str:
 
 @tool(category="crypto")
 def vigenere(ciphertext: str, key: str, decrypt: bool = True) -> str:
-    """Vigenere. decrypt=True (default): cipher->plain. decrypt=False: plain->cipher."""
+    """Vigenere. decrypt=True (default): cipher->plain. decrypt=False: plain->cipher.
+    :param decrypt: decrypt
+    :param key: secret key or password
+    :param ciphertext: ciphertext to decrypt
+    """
     key = _clean(key)
     if not key:
         return "Empty key."
@@ -88,7 +101,10 @@ def vigenere(ciphertext: str, key: str, decrypt: bool = True) -> str:
 
 @tool(category="crypto")
 def beaufort(ciphertext: str, key: str) -> str:
-    """Beaufort cipher (symmetric): plain = key - cipher mod 26."""
+    """Beaufort cipher (symmetric): plain = key - cipher mod 26.
+    :param key: secret key or password
+    :param ciphertext: ciphertext to decrypt
+    """
     key = _clean(key)
     if not key:
         return "Empty key."
@@ -109,7 +125,11 @@ def beaufort(ciphertext: str, key: str) -> str:
 
 @tool(category="crypto")
 def railfence(text: str, rails: int, decrypt: bool = False) -> str:
-    """Rail fence. decrypt=False (default): plain->cipher. decrypt=True: cipher->plain."""
+    """Rail fence. decrypt=False (default): plain->cipher. decrypt=True: cipher->plain.
+    :param text: input text
+    :param rails: number of rails for rail fence
+    :param decrypt: decrypt
+    """
     n = len(text)
     cycle = 2 * (rails - 1)
     if decrypt:
@@ -134,7 +154,10 @@ def railfence(text: str, rails: int, decrypt: bool = False) -> str:
 
 @tool(category="crypto")
 def playfair(ciphertext: str, key: str) -> str:
-    """Playfair decrypt. Key deduplicates, 'J' merged into 'I' (standard CTF convention)."""
+    """Playfair decrypt. Key deduplicates, 'J' merged into 'I' (standard CTF convention).
+    :param key: secret key or password
+    :param ciphertext: ciphertext to decrypt
+    """
     key = _clean(key).replace("J", "I")
     table = []
     for c in key + ALPHA.replace("J", ""):
@@ -160,7 +183,13 @@ def playfair(ciphertext: str, key: str) -> str:
 
 @tool(category="crypto")
 def hill(ciphertext: str, a: int, b: int, c: int, d: int) -> str:
-    """Hill cipher 2x2 decrypt. Key matrix [[a,b],[c,d]] must be invertible mod 26."""
+    """Hill cipher 2x2 decrypt. Key matrix [[a,b],[c,d]] must be invertible mod 26.
+    :param b: b
+    :param c: c
+    :param ciphertext: ciphertext to decrypt
+    :param d: RSA private exponent
+    :param a: a
+    """
     det = (a * d - b * c) % 26
     try:
         inv_det = pow(det, -1, 26)
@@ -181,7 +210,11 @@ def hill(ciphertext: str, a: int, b: int, c: int, d: int) -> str:
 
 @tool(category="crypto")
 def columnar(ciphertext: str, key: str, decrypt: bool = False) -> str:
-    """Columnar transposition. decrypt=False: plain->cipher (X padded). decrypt=True: cipher->plain."""
+    """Columnar transposition. decrypt=False: plain->cipher (X padded). decrypt=True: cipher->plain.
+    :param decrypt: decrypt
+    :param key: secret key or password
+    :param ciphertext: ciphertext to decrypt
+    """
     key = _clean(key)
     order = sorted(range(len(key)), key=lambda i: key[i])
     if decrypt:
@@ -204,7 +237,10 @@ def columnar(ciphertext: str, key: str, decrypt: bool = False) -> str:
 
 @tool(category="crypto")
 def bacon(text: str, variant: str = "24") -> str:
-    """Bacon's cipher. Decode A/B pairs (case-insensitive). variant 24 (I/J, U/V) or 26."""
+    """Bacon's cipher. Decode A/B pairs (case-insensitive). variant 24 (I/J, U/V) or 26.
+    :param text: input text
+    :param variant: cipher variant
+    """
     pairs = {
         "24": {f"{i:05b}": chr(65 + i) if i < 24 else "I/J" for i in range(24)},
         "26": {f"{i:05b}": chr(65 + i) for i in range(26)},
@@ -220,7 +256,9 @@ def bacon(text: str, variant: str = "24") -> str:
 
 @tool(category="crypto")
 def frequency(text: str) -> str:
-    """Letter frequency + bigrams (for substitution ciphers)."""
+    """Letter frequency + bigrams (for substitution ciphers).
+    :param text: input text
+    """
     letters = re.sub(r"[^A-Za-z]", "", text).lower()
     if not letters:
         return "No letters found."
@@ -237,7 +275,10 @@ def frequency(text: str) -> str:
 
 @tool(category="crypto")
 def vigenere_keylength(ciphertext: str, max_len: int = 20) -> str:
-    """Guess the Vigenere key length via Index of Coincidence (Kasiski)."""
+    """Guess the Vigenere key length via Index of Coincidence (Kasiski).
+    :param max_len: max len
+    :param ciphertext: ciphertext to decrypt
+    """
     ct = _clean(ciphertext)
     if len(ct) < 40:
         return "Text too short for IC analysis (need ~40+ letters)."
@@ -265,5 +306,8 @@ def vigenere_keylength(ciphertext: str, max_len: int = 20) -> str:
 
 @tool(category="crypto")
 def rot47(text: str, decrypt: bool = True) -> str:
-    """ROT47 (ASCII 33-126). Symmetric."""
+    """ROT47 (ASCII 33-126). Symmetric.
+    :param text: input text
+    :param decrypt: decrypt
+    """
     return "".join(chr(33 + ((ord(c) - 33 + 47) % 94)) if 33 <= ord(c) <= 126 else c for c in text)

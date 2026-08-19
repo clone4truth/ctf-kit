@@ -21,6 +21,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, HTMLResponse
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -80,6 +81,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+API_TOKEN = os.environ.get("CTFKIT_API_TOKEN", "")
+
+
+@app.middleware("http")
+async def _authz(request: Request, call_next):
+    """Require `Authorization: Bearer <token>` on /api/* when CTFKIT_API_TOKEN is set."""
+    if API_TOKEN and request.url.path.startswith("/api") and request.method != "OPTIONS":
+        if request.headers.get("Authorization", "") != f"Bearer {API_TOKEN}":
+            return JSONResponse({"detail": "Invalid or missing API token"}, status_code=401)
+    return await call_next(request)
+
 
 @app.get("/health", tags=["Status"])
 @app.get("/api/health", tags=["Status"])
@@ -135,6 +147,32 @@ def get_tool_detail(name: str) -> dict:
             for p in tool["params"]
         ]
     }
+
+
+@app.get("/dashboard", tags=["Status"])
+@app.get("/api/dashboard", tags=["Status"])
+def dashboard() -> HTMLResponse:
+    """Minimal dependency-free HTML tool explorer."""
+    tools = sorted(TOOLS.values(), key=lambda t: (t["category"], t["name"]))
+    chips = "".join(
+        f"<span class='chip'>{c} · {sum(1 for t in tools if t['category'] == c)}</span>"
+        for c in sorted({t["category"] for t in tools}))
+    rows = "".join(
+        f"<tr><td><code>{t['name']}</code></td><td>{t['category']}</td>"
+        f"<td>{t['summary']}</td><td class='mono'>{', '.join(p['name'] for p in t['params'])}</td></tr>"
+        for t in tools)
+    return HTMLResponse(f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><title>CTF Kit — Tool Explorer</title>
+<style>
+body{{font-family:ui-monospace,Consolas,monospace;background:#0f172a;color:#e2e8f0;margin:2rem;}}
+h1{{color:#38bdf8}} .chip{{background:#1e293b;border:1px solid #334155;border-radius:999px;padding:2px 10px;margin:0 4px 6px 0;display:inline-block}}
+table{{border-collapse:collapse;width:100%;margin-top:1rem}} th,td{{text-align:left;padding:6px 10px;border-bottom:1px solid #1e293b}}
+th{{color:#94a3b8;font-size:.8em;text-transform:uppercase}} code{{color:#a5f3fc}} .mono{{color:#cbd5e1;font-size:.85em}}
+</style></head><body>
+<h1>⚡ CTF Kit — {len(tools)} Tools</h1>
+{chips}
+<table><thead><tr><th>Tool</th><th>Category</th><th>Description</th><th>Params</th></tr></thead>
+<tbody>{rows}</tbody></table></body></html>""")
 
 
 @app.post("/api/run", tags=["Execution"])

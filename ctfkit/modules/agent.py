@@ -36,7 +36,12 @@ def _save_new_tool_counter(value: int):
 
 @tool(category="misc")
 def scaffold_new_tool(name_hint: str, category: str, summary: str, params: str = "data:str") -> str:
-    """Scaffold a new tool module and auto-register it when existing tools are insufficient."""
+    """Scaffold a new tool module and auto-register it when existing tools are insufficient.
+    :param params: params
+    :param name_hint: name hint
+    :param category: category
+    :param summary: summary
+    """
     import re as _re
     counter = _load_new_tool_counter() + 1
     safe_name = _re.sub(r"[^a-z0-9_]", "", name_hint.lower().strip().replace("-", "_").replace(" ", "_")) or f"agent_tool_{counter}"
@@ -206,6 +211,11 @@ def _extract_knowledge(query: str, limit: int = 3) -> str:
     except Exception as ex:
         log.warning("Knowledge retrieval failed: %s", ex)
         return f"Knowledge retrieval failed: {ex}"
+
+
+# params (csv key data, PEM key material) can't be inferred from free text —
+# queueing them would produce guaranteed-ERROR runs
+_UNINFERABLE = {"rsa_hastad", "rsa_parse_key"}
 
 
 def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge: str) -> dict:
@@ -712,9 +722,6 @@ def _build_strategy(
     steps: list[dict] = []
     excluded: list[str] = list(exclude or [])
     hint = f" {extra_context[:400]}" if extra_context else ""
-    # params (csv key data, PEM key material) can't be inferred from free text —
-    # queueing them would produce guaranteed-ERROR runs
-    _UNINFERABLE = {"rsa_hastad", "rsa_parse_key"}
 
     for step in _external_steps(category, problem_statement, knowledge, excluded, extra_context, hints):
         steps.append(step)
@@ -860,21 +867,53 @@ def discover_techniques(problem_statement: str, category: str = "") -> str:
     return "\n".join(lines)
 
 
+def _llm_pick(problem_statement: str, category: str, tried: list[str], last_output: str) -> str | None:
+    """Optional LLM steering: ask an OpenAI-compatible endpoint (env CTFKIT_LLM_ENDPOINT)
+    which tool to try next. Any failure returns None and the heuristic continues."""
+    import os as _os
+    import urllib.request as _ur
+    import json as _json
+    endpoint = _os.environ.get("CTFKIT_LLM_ENDPOINT", "")
+    if not endpoint:
+        return None
+    avail = sorted(
+        n for n, m in TOOLS.items()
+        if m["category"] == category and n not in tried and not n.startswith("external_") and n not in _UNINFERABLE)
+    if not avail:
+        return None
+    prompt = (f"CTF challenge: {problem_statement[:500]}\n"
+              f"Category: {category}. Tools already tried: {', '.join(sorted(tried)[-15:])}\n"
+              f"Last tool outputs: {last_output[:600]}\n"
+              f"Choose exactly one tool name from: {', '.join(avail)}. Reply with the name only.")
+    body = _json.dumps({
+        "model": _os.environ.get("CTFKIT_LLM_MODEL", "default"),
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+    }).encode()
+    headers = {"Content-Type": "application/json"}
+    if _os.environ.get("CTFKIT_LLM_KEY"):
+        headers["Authorization"] = f"Bearer {_os.environ['CTFKIT_LLM_KEY']}"
+    req = _ur.Request(endpoint, data=body, headers=headers)
+    try:
+        with _ur.urlopen(req, timeout=20) as resp:
+            data = _json.loads(resp.read().decode())
+        text = ((data.get("choices") or [{}])[0].get("message", {}) or {}).get("content", "") or data.get("content", "")
+        for cand in re.split(r"[,\s]+", text):
+            cand = cand.strip("`'\"();[]{}")
+            if cand in avail:
+                return cand
+    except Exception:
+        return None
+    return None
+
+
 @tool(category="misc")
 def autonomous_solve(problem_statement: str, max_iterations: int = 8) -> str:
     """Autonomous agent: plan -> recall -> iterative solve -> extract flag -> learn.
-
-    This agent:
-    - Understands the problem first (detect_challenge + recalled knowledge)
-    - Uses the category's external CLIs first (nmap, gobuster, binwalk, hashcat,
-      steghide, objdump, ...) before any custom/builtin tool
-    - NEVER repeats a failed technique in the same run (tried tools are excluded)
-    - Adapts every iteration: strategy is rebuilt from failures + latest output
-    - Steers the next move using the latest tool output (feedback loop)
-    - When known techniques are exhausted, runs technique discovery and
-      scaffolds a new tool as a breakthrough, then keeps trying
-    - Saves memory after every run for cumulative learning
+    :param problem_statement: problem statement
+    :param max_iterations: max iterations
     """
+
     state = AgentState()
     state.increment_total_runs()
     start_time = time.time()
@@ -961,6 +1000,15 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8) -> str:
     for iteration in range(current_iteration, max_iterations):
         iterations_used = iteration + 1
         report.append(f"--- Iteration {iteration + 1}/{max_iterations} ---")
+
+        llm_pick = _llm_pick(problem_statement, category, sorted(tried_tools), last_output)
+        if llm_pick:
+            strategy = [{
+                "tool": llm_pick, "key": llm_pick,
+                "args": _infer_args(llm_pick, plan_output, problem_statement, knowledge),
+                "reason": "LLM steering pick", "source": "llm",
+            }] + [s for s in strategy if s.get("key") != llm_pick]
+            report.append(f"🎯 LLM STEERING: trying {llm_pick} first")
 
         if not strategy:
             report.append("🧠 Known techniques exhausted. Running technique discovery for a breakthrough...")

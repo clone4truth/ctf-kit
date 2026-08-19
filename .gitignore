@@ -6,3 +6,6 @@ memory/
 writeups/
 testdata/carved/
 testdata/gif_frames/
+build/
+dist/
+*.spec

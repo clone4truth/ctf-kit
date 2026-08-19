@@ -33,6 +33,7 @@ async def main():
     lines = []
 
     async def collect():
+        proc.stdout._limit = 8 * 1024 * 1024  # ponytail: tools/list line exceeds default 64KB with per-tool schemas
         while True:
             line = await proc.stdout.readline()
             if not line:

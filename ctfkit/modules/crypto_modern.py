@@ -10,7 +10,10 @@ from ..utils import from_hex, from_b64, b64, printable
 
 @tool(category="crypto")
 def xor_brute(data_hex: str, key_length: int = 1) -> str:
-    """Brute-force XOR with a multi-byte key. key_length=1: single byte. key_length>1: frequency-based key recovery per position."""
+    """Brute-force XOR with a multi-byte key. key_length=1: single byte. key_length>1: frequency-based key recovery per position.
+    :param data_hex: hex-encoded input data
+    :param key_length: key length in bits
+    """
     from ..utils import english_score, best_lines
     data = from_hex(data_hex)
     if not data:
@@ -33,7 +36,10 @@ def xor_brute(data_hex: str, key_length: int = 1) -> str:
 
 @tool(category="crypto")
 def xor_keyed(data_hex: str, key_hex: str) -> str:
-    """XOR with a known key (hex)."""
+    """XOR with a known key (hex).
+    :param key_hex: hex-encoded key
+    :param data_hex: hex-encoded input data
+    """
     data = from_hex(data_hex)
     key = from_hex(key_hex)
     if not key:
@@ -44,7 +50,14 @@ def xor_keyed(data_hex: str, key_hex: str) -> str:
 
 @tool(category="crypto")
 def rsa_decrypt(n: int, e: int, ciphertext: int, p: int = 0, q: int = 0, d: int = 0) -> str:
-    """RSA decrypt. Provide p/q or d. Without both: try trial-division factoring (small n). Auto-tries paddings."""
+    """RSA decrypt. Provide p/q or d. Without both: try trial-division factoring (small n). Auto-tries paddings.
+    :param e: RSA public exponent
+    :param ciphertext: ciphertext to decrypt
+    :param d: RSA private exponent
+    :param q: RSA prime q
+    :param p: RSA prime p
+    :param n: RSA modulus
+    """
     if not d:
         if not p:
             for i in range(2, int(n ** 0.5) + 1):
@@ -84,7 +97,11 @@ def rsa_decrypt(n: int, e: int, ciphertext: int, p: int = 0, q: int = 0, d: int 
 
 @tool(category="crypto")
 def rsa_small_e(n: int, e: int, ciphertext: int) -> str:
-    """RSA with a small exponent (e=3 etc): try taking the e-th root without mod n (m^e < n)."""
+    """RSA with a small exponent (e=3 etc): try taking the e-th root without mod n (m^e < n).
+    :param n: RSA modulus
+    :param e: RSA public exponent
+    :param ciphertext: ciphertext to decrypt
+    """
     try:
         m = round(ciphertext ** (1 / e))
         while m ** e < ciphertext:
@@ -105,7 +122,14 @@ _AES_MODES = {"ECB", "CBC", "CFB", "OFB", "CTR", "GCM"}
 @tool(category="crypto")
 def aes_crypt(data_b64: str, key_b64: str, mode: str = "ECB", iv_b64: str = "",
               tag_b64: str = "", encrypt: bool = False) -> str:
-    """AES decrypt/encrypt. mode: ECB/CBC/CFB/OFB/CTR/GCM. Input/output base64. Auto-tries PKCS7 & no padding."""
+    """AES decrypt/encrypt. mode: ECB/CBC/CFB/OFB/CTR/GCM. Input/output base64. Auto-tries PKCS7 & no padding.
+    :param mode: cipher mode
+    :param tag_b64: tag b64
+    :param key_b64: key b64
+    :param iv_b64: iv b64
+    :param data_b64: data b64
+    :param encrypt: encrypt
+    """
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
     mode = mode.upper()
     if mode not in _AES_MODES:
@@ -145,8 +169,12 @@ def aes_crypt(data_b64: str, key_b64: str, mode: str = "ECB", iv_b64: str = "",
 @tool(category="crypto")
 def aes_cbc_bitflip(block_hex: str, original: str, target: str, block_index: int = 0) -> str:
     """CBC bit-flip: compute C' so the next plaintext block changes from 'original' to 'target'.
-    block_hex = ciphertext block index (block_index), original = known plaintext, target = desired plaintext.
+    :param original: original plaintext
+    :param block_index: block index
+    :param block_hex: hex-encoded cipher block
+    :param target: target
     """
+
     c = from_hex(block_hex)
     orig = original.encode()
     tgt = target.encode()
@@ -158,7 +186,9 @@ def aes_cbc_bitflip(block_hex: str, original: str, target: str, block_index: int
 
 @tool(category="crypto")
 def hash_identify(hash_str: str) -> str:
-    """Identify hash type: bcrypt/$6$/MD5/SHA-1/SHA-2/NTLM/MD4 etc. from length & prefix."""
+    """Identify hash type: bcrypt/$6$/MD5/SHA-1/SHA-2/NTLM/MD4 etc. from length & prefix.
+    :param hash_str: hash string to identify/analyze
+    """
     h = hash_str.strip()
     if h.startswith("$2a$") or h.startswith("$2b$") or h.startswith("$2y$"):
         return "bcrypt"
@@ -193,7 +223,10 @@ def hash_identify(hash_str: str) -> str:
 
 @tool(category="crypto")
 def hash_generate(text: str, algorithm: str = "md5") -> str:
-    """Generate a hash. algorithm: md5/sha1/sha224/sha256/sha384/sha512/sha3_256/sha3_512/md4/ntlm."""
+    """Generate a hash. algorithm: md5/sha1/sha224/sha256/sha384/sha512/sha3_256/sha3_512/md4/ntlm.
+    :param text: input text
+    :param algorithm: hash algorithm name
+    """
     alg = algorithm.lower().replace("-", "_")
     if alg in ("ntlm", "md4"):
         if alg == "ntlm":
@@ -210,7 +243,11 @@ def hash_generate(text: str, algorithm: str = "md5") -> str:
 
 @tool(category="crypto")
 def hash_crack_common(hash_hex: str, wordlist_path: str = "", max_lines: int = 100000) -> str:
-    """Crack a common hash (md5/sha1/sha256/sha512) with a wordlist. Default: small bundled wordlist."""
+    """Crack a common hash (md5/sha1/sha256/sha512) with a wordlist. Default: small bundled wordlist.
+    :param hash_hex: hash hex
+    :param max_lines: max lines
+    :param wordlist_path: wordlist path
+    """
     import os
     h = hash_hex.strip().lower()
     alg = hash_identify(h)
@@ -250,7 +287,11 @@ def _isqrt(n: int) -> int:
 
 @tool(category="crypto")
 def rsa_wiener(n: int, e: int, ciphertext: int = 0) -> str:
-    """Wiener's attack for RSA with small private exponent d (d < 1/3 * n^(1/4))."""
+    """Wiener's attack for RSA with small private exponent d (d < 1/3 * n^(1/4)).
+    :param n: RSA modulus
+    :param e: RSA public exponent
+    :param ciphertext: ciphertext to decrypt
+    """
     import math
 
     def cont_frac(num, den):
@@ -301,7 +342,12 @@ def rsa_wiener(n: int, e: int, ciphertext: int = 0) -> str:
 
 @tool(category="crypto")
 def rsa_fermat(n: int, e: int = 65537, ciphertext: int = 0, max_iter: int = 1000000) -> str:
-    """Fermat factorization when prime factors p and q are close (|p - q| is small)."""
+    """Fermat factorization when prime factors p and q are close (|p - q| is small).
+    :param n: RSA modulus
+    :param e: RSA public exponent
+    :param max_iter: maximum iterations (control knob)
+    :param ciphertext: ciphertext to decrypt
+    """
     import math
     a = _isqrt(n)
     if a * a < n:
@@ -340,7 +386,13 @@ def rsa_fermat(n: int, e: int = 65537, ciphertext: int = 0, max_iter: int = 1000
 
 @tool(category="crypto")
 def rsa_common_modulus(n: int, e1: int, e2: int, c1: int, c2: int) -> str:
-    """Common Modulus attack: same n, different coprime public exponents e1, e2 on the same message."""
+    """Common Modulus attack: same n, different coprime public exponents e1, e2 on the same message.
+    :param e2: e2
+    :param c1: c1
+    :param e1: e1
+    :param n: RSA modulus
+    :param c2: c2
+    """
     import math
 
     def ext_gcd(a, b):
@@ -372,7 +424,11 @@ def rsa_common_modulus(n: int, e1: int, e2: int, c1: int, c2: int) -> str:
 
 @tool(category="crypto")
 def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
-    """Hastad's Broadcast attack (Chinese Remainder Theorem for identical message sent with small e)."""
+    """Hastad's Broadcast attack (Chinese Remainder Theorem for identical message sent with small e).
+    :param ciphertexts_csv: comma-separated ciphertexts
+    :param moduli_csv: comma-separated RSA moduli
+    :param e: RSA public exponent
+    """
     import math
     from functools import reduce
     
@@ -408,7 +464,9 @@ def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
 
 @tool(category="crypto")
 def rsa_parse_key(key_data_or_path: str) -> str:
-    """Parse RSA public or private keys (.pem / .pub / .key / OpenSSH) into n, e, d, p, q."""
+    """Parse RSA public or private keys (.pem / .pub / .key / OpenSSH) into n, e, d, p, q.
+    :param key_data_or_path: key material or path to key file
+    """
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     import os
@@ -459,7 +517,11 @@ def rsa_parse_key(key_data_or_path: str) -> str:
 
 @tool(category="crypto")
 def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
-    """Known Plaintext Attack (KPA) / Crib dragging against one ciphertext or two ciphertexts sharing a key."""
+    """Known Plaintext Attack (KPA) / Crib dragging against one ciphertext or two ciphertexts sharing a key.
+    :param crib: crib
+    :param ct1_hex: ct1 hex
+    :param ct2_hex: ct2 hex
+    """
     c1 = from_hex(ct1_hex)
     crib_bytes = crib.encode("utf-8")
     
@@ -488,7 +550,10 @@ def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
 
 @tool(category="crypto")
 def lcg_solve(states_csv: str, m: int = 0) -> str:
-    """Recover LCG parameters (a, c, m) from consecutive outputs (x0, x1, x2, ...) and predict future states."""
+    """Recover LCG parameters (a, c, m) from consecutive outputs (x0, x1, x2, ...) and predict future states.
+    :param m: m
+    :param states_csv: comma-separated states
+    """
     import math
     from functools import reduce
     
@@ -529,7 +594,13 @@ def lcg_solve(states_csv: str, m: int = 0) -> str:
 @tool(category="crypto")
 def hash_length_extension(original_data: str, append_data: str, original_hash: str,
                           key_length: int = 16, algorithm: str = "md5") -> str:
-    """Generate Hash Length Extension payload and forged signature for H(key || original_data)."""
+    """Generate Hash Length Extension payload and forged signature for H(key || original_data).
+    :param original_data: original data
+    :param algorithm: hash algorithm name
+    :param append_data: data to append
+    :param original_hash: original hash value
+    :param key_length: key length in bits
+    """
     import struct
     alg = algorithm.lower().replace("-", "_")
     
@@ -568,7 +639,11 @@ def hash_length_extension(original_data: str, append_data: str, original_hash: s
 
 @tool(category="crypto")
 def aes_gcm_nonce_reuse(ct1_hex: str, ct2_hex: str, pt1_hex: str = "") -> str:
-    """Recover plaintext when two AES-GCM messages reuse a nonce: ct1^ct2 = pt1^pt2. Provide one known plaintext to recover the other."""
+    """Recover plaintext when two AES-GCM messages reuse a nonce: ct1^ct2 = pt1^pt2. Provide one known plaintext to recover the other.
+    :param pt1_hex: pt1 hex
+    :param ct1_hex: ct1 hex
+    :param ct2_hex: ct2 hex
+    """
     try:
         c1, c2 = from_hex(ct1_hex), from_hex(ct2_hex)
     except Exception as ex:
@@ -590,3 +665,128 @@ def aes_gcm_nonce_reuse(ct1_hex: str, ct2_hex: str, pt1_hex: str = "") -> str:
     else:
         out.append("pt1_hex empty: supply the known plaintext (hex) to recover the other message.")
     return "\n".join(out)
+
+
+def _ecc_add(px, py, qx, qy, a, p):
+    if px is None:
+        return qx, qy
+    if qx is None:
+        return px, py
+    if px == qx and (py + qy) % p == 0:
+        return None, None
+    if px == qx and py == qy:
+        lam = (3 * px * px + a) * pow(2 * py, -1, p) % p
+    else:
+        lam = (qy - py) * pow(qx - px, -1, p) % p
+    rx = (lam * lam - px - qx) % p
+    ry = (lam * (px - rx) - py) % p
+    return rx, ry
+
+
+@tool(category="crypto")
+def ecc_point_ops(px: int = 0, py: int = 0, qx: int = 0, qy: int = 0, a: int = 2, b: int = 2, p: int = 17, scalar: int = 0) -> str:
+    """Elliptic curve point arithmetic on y^2 = x^3 + ax + b over GF(p): scalar multiplication (double-and-add) and point addition.
+
+    :param px: x coordinate of point P
+    :param py: y coordinate of point P
+    :param qx: x coordinate of point Q (for addition)
+    :param qy: y coordinate of point Q (for addition)
+    :param a: curve coefficient a
+    :param b: curve coefficient b
+    :param p: prime field modulus
+    :param scalar: scalar to multiply P by (0 = just add P+Q)
+    """
+    try:
+        if scalar:
+            rx, ry = None, None
+            tx, ty = px, py
+            s = scalar
+            while s:
+                if s & 1:
+                    rx, ry = _ecc_add(rx, ry, tx, ty, a, p)
+                tx, ty = _ecc_add(tx, ty, tx, ty, a, p)
+                s >>= 1
+            return f"{scalar} * ({px}, {py}) mod {p} = ({rx}, {ry})" if rx is not None else f"{scalar} * ({px}, {py}) = point at infinity"
+        rx, ry = _ecc_add(px, py, qx, qy, a, p)
+        return f"({px}, {py}) + ({qx}, {qy}) = ({rx}, {ry})" if rx is not None else "sum = point at infinity"
+    except Exception as ex:
+        return f"ERROR: {ex}"
+
+
+@tool(category="crypto")
+def ecc_bsgs(px: int, py: int, qx: int, qy: int, a: int = 2, p: int = 0, bound: int = 100000) -> str:
+    """Baby-step giant-step discrete log: find k with k*P = Q on y^2 = x^3 + ax + b over GF(p). Use when the subgroup is small.
+
+    :param px: x coordinate of base point P
+    :param py: y coordinate of base point P
+    :param qx: x coordinate of target point Q
+    :param qy: y coordinate of target point Q
+    :param a: curve coefficient a
+    :param p: prime field modulus
+    :param bound: search bound for k
+    """
+    import math
+    try:
+        m = math.isqrt(bound) + 1
+        table = {}
+        cur = None
+        for j in range(m):
+            table.setdefault((cur[0] if cur else None, cur[1] if cur else None), j)
+            cur = (px, py) if cur is None else _ecc_add(cur[0], cur[1], px, py, a, p)
+        mpx, mpy = None, None
+        for _ in range(m):
+            mpx, mpy = (px, py) if mpx is None else _ecc_add(mpx, mpy, px, py, a, p)
+        step = (mpx, (-mpy) % p)  # -m*P
+        rx, ry = qx, qy
+        for i in range(m + 1):
+            if (rx, ry) in table:
+                k = table[(rx, ry)] + i * m
+                if k > bound:
+                    continue
+                return f"k = {k}  (check: k*P = ({qx}, {qy}))"
+            rx, ry = _ecc_add(rx, ry, step[0], step[1], a, p)
+        return f"No k found within bound {bound} (try larger bound or smaller subgroup)."
+    except Exception as ex:
+        return f"ERROR: {ex}"
+
+
+@tool(category="crypto")
+def paillier_keygen(bits: int = 32) -> str:
+    """Generate Paillier keypair (for homomorphic-encryption challenges). bits: prime size.
+
+    :param bits: bit size of each prime p and q
+    """
+    try:
+        import sympy
+        p = sympy.randprime(2 ** (bits - 1), 2 ** bits)
+        q = sympy.randprime(2 ** (bits - 1), 2 ** bits)
+        while q == p:
+            q = sympy.randprime(2 ** (bits - 1), 2 ** bits)
+    except ImportError:
+        return "ERROR: sympy not installed. pip install sympy"
+    n = p * q
+    lam = (p - 1) * (q - 1)
+    g = n + 1
+    mu = pow(lam, -1, n)
+    return (f"p={p}\nq={q}\nn={n}\ng={g}\nlambda={lam}\nmu={mu}\n"
+            f"public (n,g) | private (lambda,mu)")
+
+
+@tool(category="crypto")
+def paillier_decrypt(ciphertext: int, p: int, q: int, g: int = 0) -> str:
+    """Decrypt a Paillier ciphertext given the primes p,q (small challenges).
+
+    :param ciphertext: Paillier ciphertext c
+    :param p: prime p
+    :param q: prime q
+    :param g: generator g (default n+1)
+    """
+    try:
+        n = p * q
+        g = g or n + 1
+        lam = (p - 1) * (q - 1)
+        c_lam = pow(ciphertext, lam, n * n)
+        m = (c_lam - 1) // n * pow(lam, -1, n) % n
+        return f"m = {m}"
+    except Exception as ex:
+        return f"ERROR: {ex}"

@@ -3,6 +3,7 @@
 import math
 import os
 import re
+import sys
 import struct
 import zlib
 
@@ -12,7 +13,9 @@ from ..utils import detect_type, printable, MAGIC
 
 @tool(category="forensics")
 def file_type(path: str) -> str:
-    """Detect file type from magic bytes + basic entropy stats."""
+    """Detect file type from magic bytes + basic entropy stats.
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     head = data[:64]
     name = detect_type(head)
@@ -26,7 +29,11 @@ def file_type(path: str) -> str:
 
 @tool(category="forensics")
 def strings_extract(path: str, min_len: int = 4, encoding: str = "ascii") -> str:
-    """Extract printable strings. encoding: ascii / utf16 / both."""
+    """Extract printable strings. encoding: ascii / utf16 / both.
+    :param min_len: min len
+    :param path: input file path
+    :param encoding: encoding
+    """
     data = open(path, "rb").read()
     out = []
     patterns = []
@@ -46,7 +53,12 @@ def strings_extract(path: str, min_len: int = 4, encoding: str = "ascii") -> str
 
 @tool(category="forensics")
 def hexdump(path: str, offset: int = 0, length: int = 256, group: int = 8) -> str:
-    """Hexdump: offset, hex + ascii column. group = bytes per hex group."""
+    """Hexdump: offset, hex + ascii column. group = bytes per hex group.
+    :param offset: offset
+    :param group: group
+    :param length: length
+    :param path: input file path
+    """
     data = open(path, "rb").read()
     chunk = data[offset:offset + length]
     lines = []
@@ -81,7 +93,10 @@ def _end_of_file(data: bytes, start: int, magic: bytes) -> int:
 
 @tool(category="forensics")
 def carve(file_path: str, out_dir: str = "carved") -> str:
-    """Carve embedded files (PNG/JPEG/GIF/ZIP/PDF/RIFF/ELF/...) from a blob. Saved to out_dir."""
+    """Carve embedded files (PNG/JPEG/GIF/ZIP/PDF/RIFF/ELF/...) from a blob. Saved to out_dir.
+    :param out_dir: output directory
+    :param file_path: input file path
+    """
     data = open(file_path, "rb").read()
     os.makedirs(out_dir, exist_ok=True)
     found = []
@@ -102,7 +117,9 @@ def carve(file_path: str, out_dir: str = "carved") -> str:
 
 @tool(category="forensics")
 def zlib_hunt(file_path: str) -> str:
-    """Find every zlib/gzip stream inside a file, decompress, preview. For compressed flags."""
+    """Find every zlib/gzip stream inside a file, decompress, preview. For compressed flags.
+    :param file_path: input file path
+    """
     data = open(file_path, "rb").read()
     found = []
     for m in re.finditer(rb"\x78[\x01\x5e\x9c\xda]|\x1f\x8b\x08", data, flags=re.DOTALL):
@@ -132,7 +149,10 @@ def _entropy(data: bytes) -> float:
 
 @tool(category="forensics")
 def entropy_map(file_path: str, block_size: int = 4096) -> str:
-    """Per-block entropy (for finding hidden data at end of file / encrypted regions)."""
+    """Per-block entropy (for finding hidden data at end of file / encrypted regions).
+    :param file_path: input file path
+    :param block_size: block size
+    """
     data = open(file_path, "rb").read()
     lines = []
     for i in range(0, len(data), block_size):
@@ -197,7 +217,10 @@ def _iter_packets(data: bytes):
 
 @tool(category="forensics")
 def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
-    """Parse PCAP / PCAPNG files and extract HTTP payloads & printable text per TCP stream."""
+    """Parse PCAP / PCAPNG files and extract HTTP payloads & printable text per TCP stream.
+    :param max_flows: max flows
+    :param pcap_path: path to the pcap file
+    """
     data = open(pcap_path, "rb").read()
     flows = {}
     n_packets = 0
@@ -246,7 +269,9 @@ def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
 
 @tool(category="forensics")
 def pcap_dns_exfil(pcap_path: str) -> str:
-    """Extract DNS query subdomains from PCAP/PCAPNG to recover exfiltrated flags or data."""
+    """Extract DNS query subdomains from PCAP/PCAPNG to recover exfiltrated flags or data.
+    :param pcap_path: path to the pcap file
+    """
     data = open(pcap_path, "rb").read()
     queries = []
     
@@ -336,7 +361,9 @@ _USB_HID_KEYS = {
 
 @tool(category="forensics")
 def pcap_usb_keystrokes(pcap_path: str) -> str:
-    """Parse USB HID keyboard packets in PCAP/PCAPNG to reconstruct typed text and flags."""
+    """Parse USB HID keyboard packets in PCAP/PCAPNG to reconstruct typed text and flags.
+    :param pcap_path: path to the pcap file
+    """
     data = open(pcap_path, "rb").read()
     typed = []
     
@@ -373,7 +400,10 @@ def pcap_usb_keystrokes(pcap_path: str) -> str:
 
 @tool(category="forensics")
 def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
-    """Detect and fix pseudo-encrypted ZIP archives (clears the fake encryption bit 0x0001)."""
+    """Detect and fix pseudo-encrypted ZIP archives (clears the fake encryption bit 0x0001).
+    :param out_path: output file path
+    :param zip_path: path to the ZIP file
+    """
     data = bytearray(open(zip_path, "rb").read())
     fixed_count = 0
     
@@ -415,7 +445,9 @@ def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
 
 @tool(category="forensics")
 def exif_gps_map(image_path: str) -> str:
-    """Extract EXIF GPS coordinates from an image and generate decimal Lat/Long and Maps links."""
+    """Extract EXIF GPS coordinates from an image and generate decimal Lat/Long and Maps links.
+    :param image_path: path to the image file
+    """
     from PIL import Image, ExifTags
     try:
         img = Image.open(image_path)
@@ -465,3 +497,25 @@ def exif_gps_map(image_path: str) -> str:
             f"Altitude  : {alt_val:.2f} m\n\n"
             f"Google Maps : {gmaps_url}\n"
             f"OpenStreetMap: {osm_url}")
+
+
+@tool(category="forensics")
+def ntfs_ads(path: str) -> str:
+    """List NTFS Alternate Data Streams (ADS) on a file or directory — hidden flags often live in :stream.
+
+    :param path: file or directory path to inspect for ADS
+    """
+    import subprocess as _sp
+    if sys.platform == "win32":
+        try:
+            out = _sp.run(["cmd", "/c", "dir", "/R", path], capture_output=True, text=True).stdout
+        except OSError:
+            return "ERROR: dir /R failed."
+        ads = [ln.strip() for ln in out.splitlines() if ":" in ln and ("$DATA" in ln or ": " in ln)]
+        ads = [a for a in ads if ":" in a and not a.startswith("Volume")]
+        return "ADS found:\n" + "\n".join(ads) if ads else f"No ADS found on {path} (or file missing)."
+    try:
+        out = _sp.run(["getfattr", "-d", "-m", "-", path], capture_output=True, text=True).stdout
+        return f"getfattr output:\n{out}" if out.strip() else f"No xattrs/ADS found on {path}."
+    except OSError:
+        return "ERROR: getfattr not installed. apt install attr"

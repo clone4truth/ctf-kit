@@ -8,19 +8,23 @@ from ..utils import printable
 
 @tool(category="stego")
 def stego_lsb(image_path: str, plane: str = "lsb", channel: str = "rgb", bit_order: str = "lsb-first", max_bytes: int = 0) -> str:
-    """Extract data from a bit plane. plane: lsb/msb. channel: rgb/rgba/g (grayscale). bit_order: lsb-first/msb-first."""
+    """Extract data from a bit plane. plane: lsb/msb. channel: rgb/rgba/g (grayscale). bit_order: lsb-first/msb-first.
+    :param channel: color channel (R/G/B/A)
+    :param max_bytes: max bytes
+    :param bit_order: bit order
+    :param image_path: path to the image file
+    :param plane: plane
+    """
     from PIL import Image
     img = Image.open(image_path)
     if channel == "g":
         img = img.convert("L")
+        raw = img.tobytes()          # 1 byte/pixel
     else:
         img = img.convert("RGB" if channel == "rgb" else "RGBA")
-    pixels = list(img.getdata())
-    bits = []
-    for px in pixels:
-        vals = px if isinstance(px, tuple) else (px,)
-        for v in vals:
-            bits.append((v >> 0 if plane == "lsb" else v >> 7) & 1)
+        raw = img.tobytes()          # contiguous R,G,B(,A) values — same order as getdata()
+    plane_bit = 0 if plane == "lsb" else 7
+    bits = [(v >> plane_bit) & 1 for v in raw]
     if bit_order == "msb-first":
         chunks = [bits[i:i + 8] for i in range(0, len(bits), 8)]
         bits = []
@@ -39,7 +43,9 @@ def stego_lsb(image_path: str, plane: str = "lsb", channel: str = "rgb", bit_ord
 
 @tool(category="stego")
 def stego_metadata(image_path: str) -> str:
-    """Extract metadata: PNG text chunks (tEXt/zTXt/iTXt), EXIF, and basic info."""
+    """Extract metadata: PNG text chunks (tEXt/zTXt/iTXt), EXIF, and basic info.
+    :param image_path: path to the image file
+    """
     from PIL import Image, ExifTags
     img = Image.open(image_path)
     res = [f"format: {img.format} | size: {img.size} | mode: {img.mode}"]
@@ -62,7 +68,11 @@ def stego_metadata(image_path: str) -> str:
 
 @tool(category="stego")
 def stego_channel(image_path: str, channel: str = "R", out_path: str = "channel.png") -> str:
-    """Isolate one color channel (R/G/B/A) into a grayscale image. Saved to out_path."""
+    """Isolate one color channel (R/G/B/A) into a grayscale image. Saved to out_path.
+    :param out_path: output file path
+    :param channel: color channel (R/G/B/A)
+    :param image_path: path to the image file
+    """
     from PIL import Image
     idx = {"R": 0, "G": 1, "B": 2, "A": 3}
     ch = channel.upper()
@@ -81,7 +91,11 @@ def stego_channel(image_path: str, channel: str = "R", out_path: str = "channel.
 
 @tool(category="stego")
 def stego_xor_images(path_a: str, path_b: str, out_path: str = "xor_result.png") -> str:
-    """XOR two images (pixel-wise). Result saved to out_path. For spotting near-identical images."""
+    """XOR two images (pixel-wise). Result saved to out_path. For spotting near-identical images.
+    :param path_a: path a
+    :param path_b: path b
+    :param out_path: output file path
+    """
     from PIL import Image
     a = Image.open(path_a).convert("RGB")
     b = Image.open(path_b).convert("RGB")
@@ -101,7 +115,9 @@ def stego_xor_images(path_a: str, path_b: str, out_path: str = "xor_result.png")
 
 @tool(category="stego")
 def stego_png_chunks(image_path: str) -> str:
-    """Dump all PNG chunks (type, length, data preview). For finding hidden chunks or odd IDATs."""
+    """Dump all PNG chunks (type, length, data preview). For finding hidden chunks or odd IDATs.
+    :param image_path: path to the image file
+    """
     data = open(image_path, "rb").read()
     if not data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "Not a PNG."
@@ -127,7 +143,10 @@ def stego_png_chunks(image_path: str) -> str:
 
 @tool(category="stego")
 def stego_gif_frames(gif_path: str, out_dir: str = "gif_frames") -> str:
-    """Extract every GIF frame to PNG. Flags often hide in a single frame."""
+    """Extract every GIF frame to PNG. Flags often hide in a single frame.
+    :param out_dir: output directory
+    :param gif_path: path to the GIF file
+    """
     from PIL import Image
     img = Image.open(gif_path)
     os.makedirs(out_dir, exist_ok=True)
@@ -143,7 +162,10 @@ def stego_gif_frames(gif_path: str, out_dir: str = "gif_frames") -> str:
 
 @tool(category="stego")
 def stego_compare(path_a: str, path_b: str) -> str:
-    """Compare two images: list coordinates of differing pixels (for visual stego)."""
+    """Compare two images: list coordinates of differing pixels (for visual stego).
+    :param path_a: path a
+    :param path_b: path b
+    """
     from PIL import Image
     a = Image.open(path_a).convert("RGB")
     b = Image.open(path_b).convert("RGB")
@@ -168,7 +190,10 @@ def stego_compare(path_a: str, path_b: str) -> str:
 
 @tool(category="stego")
 def png_fix_ihdr(image_path: str, out_path: str = "") -> str:
-    """Fix PNG image dimensions by brute-forcing width/height matching the IHDR chunk CRC32."""
+    """Fix PNG image dimensions by brute-forcing width/height matching the IHDR chunk CRC32.
+    :param out_path: output file path
+    :param image_path: path to the image file
+    """
     import struct
     import zlib
     
@@ -225,7 +250,11 @@ def png_fix_ihdr(image_path: str, out_path: str = "") -> str:
 
 @tool(category="stego")
 def stego_audio_wav(wav_path: str, bit_plane: int = 0, max_bytes: int = 500) -> str:
-    """Extract LSB steganography data from uncompressed WAV audio files."""
+    """Extract LSB steganography data from uncompressed WAV audio files.
+    :param max_bytes: max bytes
+    :param bit_plane: bit plane
+    :param wav_path: path to the WAV file
+    """
     import wave
     try:
         with wave.open(wav_path, "rb") as wf:
@@ -270,7 +299,9 @@ def stego_audio_wav(wav_path: str, bit_plane: int = 0, max_bytes: int = 500) -> 
 
 @tool(category="stego")
 def stego_dtmf_detect(wav_path: str) -> str:
-    """Decode DTMF (Dual-Tone Multi-Frequency) phone dial keypad tones from a WAV audio file."""
+    """Decode DTMF (Dual-Tone Multi-Frequency) phone dial keypad tones from a WAV audio file.
+    :param wav_path: path to the WAV file
+    """
     import wave
     import math
     import struct

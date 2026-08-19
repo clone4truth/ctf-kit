@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 @tool(category="misc")
 def detect_challenge(problem: str) -> str:
-    """Analyze a CTF problem statement: detect category + platform, suggest tools, recall prior memory. Run BEFORE solving."""
+    """Analyze a CTF problem statement: detect category + platform, suggest tools, recall prior memory. Run BEFORE solving.
+    :param problem: problem
+    """
     platform, category = detect_ctf(problem)
     hits = _recall(problem, limit=3)
     lines = [
@@ -36,7 +38,9 @@ def detect_challenge(problem: str) -> str:
 
 @tool(category="misc")
 def analyze_target(target: str) -> str:
-    """Decision engine: analyze a target/problem statement, detect category + platform, recall memory, and recommend the optimal tool chain."""
+    """Decision engine: analyze a target/problem statement, detect category + platform, recall memory, and recommend the optimal tool chain.
+    :param target: target
+    """
     base = detect_challenge(target)
     chain = select_tools(target)
     return "\n".join([
@@ -112,7 +116,9 @@ def optimize_parameters(tool_name: str, args_json: str = "") -> str:
 
 @tool(category="misc")
 def extract_flags_tool(text: str) -> str:
-    """Extract ALL flag candidates from any text, any format (flag{...}, picoCTF{...}, HTB{...}, flag: xxx, hex digests...)."""
+    """Extract ALL flag candidates from any text, any format (flag{...}, picoCTF{...}, HTB{...}, flag: xxx, hex digests...).
+    :param text: input text
+    """
     flags = extract_flags(text)
     if not flags:
         return "No flag-like strings found."
@@ -348,7 +354,9 @@ def _recall(query: str, limit: int = 3) -> list[tuple[int, str]]:
 
 @tool(category="misc")
 def triage_file(path: str) -> str:
-    """One-click master triage: auto-detect file type, entropy, strings, embedded files/zlib, format inspection, and extract flags."""
+    """One-click master triage: auto-detect file type, entropy, strings, embedded files/zlib, format inspection, and extract flags.
+    :param path: input file path
+    """
     import os
     import math
     from ..utils import detect_type, printable, MAGIC

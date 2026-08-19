@@ -12,7 +12,10 @@ from ..utils import b64, printable, from_b64, english_score
 
 @tool(category="encoding")
 def decode_base(encoded: str, base: int = 64) -> str:
-    """Decode a number/string to bytes (hex output). Base: 2, 8, 16, 32, 36, 58, 62, 64, 85."""
+    """Decode a number/string to bytes (hex output). Base: 2, 8, 16, 32, 36, 58, 62, 64, 85.
+    :param base: base
+    :param encoded: encoded string to decode
+    """
     e = encoded.strip()
     try:
         if base == 64:
@@ -46,19 +49,28 @@ def decode_base(encoded: str, base: int = 64) -> str:
 
 @tool(category="encoding")
 def encode_url(text: str, decode: bool = False) -> str:
-    """URL encode/decode (urllib). decode=True for the reverse."""
+    """URL encode/decode (urllib). decode=True for the reverse.
+    :param text: input text
+    :param decode: decode
+    """
     return urllib.parse.unquote(text) if decode else urllib.parse.quote(text)
 
 
 @tool(category="encoding")
 def encode_html_entities(text: str, decode: bool = False) -> str:
-    """HTML entity encode/decode (e.g. &lt; &#x2F;). decode=True for the reverse."""
+    """HTML entity encode/decode (e.g. &lt; &#x2F;). decode=True for the reverse.
+    :param text: input text
+    :param decode: decode
+    """
     return html.unescape(text) if decode else html.escape(text, quote=True)
 
 
 @tool(category="encoding")
 def encode_unicode_escapes(text: str, decode: bool = False) -> str:
-    """Unicode escapes: '\\u0041 \\x41' <-> text. decode=True: escapes -> text."""
+    """Unicode escapes: '\\u0041 \\x41' <-> text. decode=True: escapes -> text.
+    :param text: input text
+    :param decode: decode
+    """
     if decode:
         return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
     return " ".join(f"\\u{ord(c):04x}" for c in text)
@@ -81,7 +93,10 @@ _MORSE_REV = {v: k for k, v in _MORSE.items()}
 
 @tool(category="encoding")
 def morse(text: str, decode: bool = True) -> str:
-    """Morse code. decode=True: '.' '-' -> text (letters separated by 1 space, words by 2). decode=False: text -> morse."""
+    """Morse code. decode=True: '.' '-' -> text (letters separated by 1 space, words by 2). decode=False: text -> morse.
+    :param text: input text
+    :param decode: decode
+    """
     if decode:
         out = []
         for word in re.split(r"\s{2,}", text.strip()):
@@ -98,7 +113,10 @@ _BF = {">": 1, "<": -1, "+": 1, "-": -1}
 
 @tool(category="encoding")
 def brainfuck(code: str, input_str: str = "") -> str:
-    """Brainfuck interpreter (+ - < > [ ] . ,). input_str feeds ','."""
+    """Brainfuck interpreter (+ - < > [ ] . ,). input_str feeds ','.
+    :param input_str: input str
+    :param code: program/source code input
+    """
     tape = [0] * 30000
     ptr = 15000
     pc = 0
@@ -145,7 +163,9 @@ def brainfuck(code: str, input_str: str = "") -> str:
 
 @tool(category="encoding")
 def decode_all(data: str) -> str:
-    """Try every common encoding (base64/hex/url/html/binary/octal/rot13/morse/unicode) and show valid candidates."""
+    """Try every common encoding (base64/hex/url/html/binary/octal/rot13/morse/unicode) and show valid candidates.
+    :param data: input data to process
+    """
     data = data.strip()
     results = []
     candidates = {
@@ -177,7 +197,9 @@ def decode_all(data: str) -> str:
 
 @tool(category="encoding")
 def decode_base45(encoded: str) -> str:
-    """Decode Base45 (RFC 9285 - QR codes / health certificates)."""
+    """Decode Base45 (RFC 9285 - QR codes / health certificates).
+    :param encoded: encoded string to decode
+    """
     charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
     charmap = {c: i for i, c in enumerate(charset)}
     e = encoded.strip()
@@ -208,7 +230,9 @@ def decode_base45(encoded: str) -> str:
 
 @tool(category="encoding")
 def decode_base91(encoded: str) -> str:
-    """Decode basE91 binary-to-text encoding."""
+    """Decode basE91 binary-to-text encoding.
+    :param encoded: encoded string to decode
+    """
     lookup = [
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
         'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
@@ -260,7 +284,9 @@ _ZW_MAP = {
 
 @tool(category="encoding")
 def decode_zero_width(text: str) -> str:
-    """Extract and decode hidden Zero-Width Unicode characters (ZWSP, ZWNJ, ZWJ, ZWNBSP, WJ)."""
+    """Extract and decode hidden Zero-Width Unicode characters (ZWSP, ZWNJ, ZWJ, ZWNBSP, WJ).
+    :param text: input text
+    """
     found_chars = [c for c in text if c in _ZW_MAP]
     if not found_chars:
         return "No zero-width unicode characters found in the input text."
@@ -298,7 +324,10 @@ def decode_zero_width(text: str) -> str:
 
 @tool(category="encoding")
 def encode_zero_width(secret: str, cover_text: str = "FLAG") -> str:
-    """Hide a secret message inside cover text using Zero-Width spaces (ZWSP=0, ZWNJ=1)."""
+    """Hide a secret message inside cover text using Zero-Width spaces (ZWSP=0, ZWNJ=1).
+    :param secret: secret value
+    :param cover_text: cover text
+    """
     bits = "".join(f"{b:08b}" for b in secret.encode())
     zw = "".join("\u200b" if bit == "0" else "\u200c" for bit in bits)
     if len(cover_text) > 1:
@@ -308,7 +337,10 @@ def encode_zero_width(secret: str, cover_text: str = "FLAG") -> str:
 
 @tool(category="encoding")
 def decode_chain(data: str, max_depth: int = 8) -> str:
-    """Recursively peel nested multi-layer encodings (Base64, Hex, URL, HTML, Rot13, Zlib, Binary) until flag or plaintext is reached."""
+    """Recursively peel nested multi-layer encodings (Base64, Hex, URL, HTML, Rot13, Zlib, Binary) until flag or plaintext is reached.
+    :param data: input data to process
+    :param max_depth: max depth
+    """
     from ..flagmeta import detect_flag
     
     current = data.strip()
@@ -374,7 +406,10 @@ def _morse_try(data: str) -> bytes:
 
 @tool(category="encoding")
 def decode_cascade(data: str, max_depth: int = 8) -> str:
-    """Auto peel repeated encodings (Ciphey-style): base64/hex/url/html/rot13/binary until text settles or a flag appears."""
+    """Auto peel repeated encodings (Ciphey-style): base64/hex/url/html/rot13/binary until text settles or a flag appears.
+    :param data: input data to process
+    :param max_depth: max depth
+    """
     rot13 = str.maketrans(
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
         "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm")
