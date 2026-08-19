@@ -2,7 +2,7 @@
 
 @memory/_index.md
 
-CTF toolkit: 92 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+CTF toolkit: 115 tools (encoding, crypto, stego, forensics, web, rev, pwn,
 osint, misc) as an MCP server (`ctf-tools`, registered in `.mcp.json`) plus a REST
 API server (`server.py`) with Swagger UI at `/docs`.
 
@@ -46,7 +46,7 @@ API server (`server.py`) with Swagger UI at `/docs`.
 ## Testing & validation
 
 - `python tests/gen_testdata.py` regenerates `testdata/` demo files.
-- `python tests/test_smoke.py` — 87 smoke tests over all tools.
+- `python tests/test_smoke.py` — 101 smoke tests over all tools.
 - `python tests/test_mcp.py` — MCP handshake check.
 - REST API runs on port **8765** (8000 is blocked on this machine).
 

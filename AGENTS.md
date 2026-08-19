@@ -1,6 +1,6 @@
 # CTF KIT — Agent Instructions (universal: opencode, Claude Code, Cursor, Codex, Gemini CLI)
 
-CTF toolkit with 103 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+CTF toolkit with 115 tools (encoding, crypto, stego, forensics, web, rev, pwn,
 osint, misc) exposed as a Headless MCP server and REST API, including external
 CLI tool wrappers per category (nmap, ffuf, sqlmap, binwalk, steghide, hashcat...).
 
@@ -57,7 +57,7 @@ CLI tool wrappers per category (nmap, ffuf, sqlmap, binwalk, steghide, hashcat..
 ## Testing & validation
 
 - `python tests/gen_testdata.py` regenerates `testdata/` demo files.
-- `python tests/test_smoke.py` — 94 smoke tests over all tools.
+- `python tests/test_smoke.py` — 101 smoke tests over all tools.
 - `python tests/test_mcp.py` — MCP handshake check.
 - REST API runs on port **8765** (8000 is blocked on this machine).
 
