@@ -55,6 +55,8 @@ def main() -> None:
         f"- category: {category}",
         f"- tools: {', '.join(args.tool) or '-'}",
         f"- flag: {args.flag}" if args.flag else "- flag: -",
+        f"- iterations: 1",
+        f"- tools_failed: -",
         "",
         "## What worked / lessons",
         "",

