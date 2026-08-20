@@ -3,8 +3,8 @@
 Fast strategy + comprehension tests for ALL 8 categories (no tool execution),
 plus real end-to-end solves for categories with local testdata:
 crypto (RSA close primes), stego (testdata/meta2.png), forensics (testdata/test.pcap).
-web/osint/pwn/rev need a live target or a real vulnerable binary — their flow is
-covered at strategy level; the solve paths require testing on a CTF instance.
+The broader deterministic benchmark in scripts/eval_core.py also exercises web
+autonomy and direct probes for rev, pwn, OSINT, and misc.
 
 Run: python tests/test_agent_categories.py   (CTF_E2E=0 skips the slow solves)
 """
@@ -27,7 +27,7 @@ RUN_E2E = os.environ.get("CTF_E2E", "1") != "0"
 TESTS: list[tuple[str, object]] = []
 
 
-def test(name, fn):
+def _reg_test(name, fn):
     TESTS.append((name, fn))
 
 
@@ -172,34 +172,43 @@ def t_e2e_forensics_pcap():
     assert "flag{http_extracted}" in out and "SOLVED" in out, out[-600:]
 
 
-test("understand: lsb", t_understand_lsb)
-test("understand: rsa", t_understand_rsa)
-test("understand: sqli", t_understand_sqli)
-test("understand: zip", t_understand_zip)
-test("osint strategy", t_osint_strategy)
-test("web strategy", t_web_strategy)
-test("forensics strategy", t_forensics_strategy)
-test("stego strategy", t_stego_strategy)
-test("crypto strategy", t_crypto_strategy)
-test("rev strategy", t_rev_strategy)
-test("pwn strategy", t_pwn_strategy)
-test("encoding strategy", t_encoding_strategy)
-test("no duplicate keys", t_no_duplicate_keys)
+_reg_test("understand: lsb", t_understand_lsb)
+_reg_test("understand: rsa", t_understand_rsa)
+_reg_test("understand: sqli", t_understand_sqli)
+_reg_test("understand: zip", t_understand_zip)
+_reg_test("osint strategy", t_osint_strategy)
+_reg_test("web strategy", t_web_strategy)
+_reg_test("forensics strategy", t_forensics_strategy)
+_reg_test("stego strategy", t_stego_strategy)
+_reg_test("crypto strategy", t_crypto_strategy)
+_reg_test("rev strategy", t_rev_strategy)
+_reg_test("pwn strategy", t_pwn_strategy)
+_reg_test("encoding strategy", t_encoding_strategy)
+_reg_test("no duplicate keys", t_no_duplicate_keys)
 if RUN_E2E:
-    test("e2e: crypto RSA close primes -> flag{fermat}", t_e2e_crypto_rsa)
-    test("e2e: stego meta2.png -> flag{hidden_in_text_chunk}", t_e2e_stego_metadata)
-    test("e2e: forensics test.pcap -> flag{http_extracted}", t_e2e_forensics_pcap)
-else:
-    print("CTF_E2E=0: skipping the 3 slow end-to-end solve tests")
+    _reg_test("e2e: crypto RSA close primes -> flag{fermat}", t_e2e_crypto_rsa)
+    _reg_test("e2e: stego meta2.png -> flag{hidden_in_text_chunk}", t_e2e_stego_metadata)
+    _reg_test("e2e: forensics test.pcap -> flag{http_extracted}", t_e2e_forensics_pcap)
 
-passed = failed = 0
-for name, fn in TESTS:
-    try:
+
+def test_agent_categories_all():
+    """Pytest entrypoint for agent category tests."""
+    for name, fn in TESTS:
         fn()
-        passed += 1
-        print(f"  OK  {name}")
-    except Exception as ex:
-        failed += 1
-        print(f"FAIL  {name}: {ex}")
-print(f"\n{passed}/{passed + failed} category tests passed, {failed} failed")
-sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    if not RUN_E2E:
+        print("CTF_E2E=0: skipping the 3 slow end-to-end solve tests")
+
+    passed = failed = 0
+    for name, fn in TESTS:
+        try:
+            fn()
+            passed += 1
+            print(f"  OK  {name}")
+        except Exception as ex:
+            failed += 1
+            print(f"FAIL  {name}: {ex}")
+    print(f"\n{passed}/{passed + failed} category tests passed, {failed} failed")
+    sys.exit(1 if failed else 0)

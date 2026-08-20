@@ -66,7 +66,9 @@ async def main():
     for tid in (3, 4):
         res = by_id[tid]["result"]
         print(f"call {REQS[tid-1]['params']['name']}: {res['content'][0]['text'][:60]!r}")
-    assert len(tools) >= 92, f"harus minimal 92 tool, dapat {len(tools)}"
+    import ctfkit.modules  # noqa: F401
+    from ctfkit.registry import TOOLS
+    assert len(tools) == len(TOOLS), f"MCP={len(tools)} berbeda dari registry={len(TOOLS)}"
     print(f"MCP HANDSHAKE OK — All {len(tools)} tools exposed properly")
 
 

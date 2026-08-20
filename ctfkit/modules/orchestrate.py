@@ -11,9 +11,11 @@ import json
 import re
 from typing import Any
 
-from ..registry import tool, run_tool, TOOLS
+from ..registry import tool, execute_tool, TOOLS
 
-_PLACEHOLDER = re.compile(r"\$prev(?:\.(\d+))?|\$data")
+_PLACEHOLDER = re.compile(r"\$prev(?:\.(\d+))?|\$step\.(\d+)|\$data")
+_MAX_STEPS = 20
+_RECURSIVE_TOOLS = {"chain_tools", "chain_tools_sequential", "autonomous_solve", "scaffold_new_tool"}
 
 
 def _resolve(value: str, prev_output: str, data: str, results: dict) -> str:
@@ -29,7 +31,7 @@ def _resolve(value: str, prev_output: str, data: str, results: dict) -> str:
             return _line(prev_output, int(m.group(1)))
         # $step.N - reference to a specific step's output
         if tok.startswith("$step."):
-            step_idx = int(m.group(1))
+            step_idx = int(m.group(2))
             return results.get(f"step_{step_idx}", "")
         return tok
     return _PLACEHOLDER.sub(repl, value)
@@ -114,7 +116,10 @@ async def _run_step(step_idx: int, step: dict, data: str, results: dict) -> tupl
     # Run tool in thread pool (since run_tool is sync)
     loop = asyncio.get_event_loop()
     try:
-        output = await loop.run_in_executor(None, run_tool, tool_name, resolved_args)
+        execution = await loop.run_in_executor(None, execute_tool, tool_name, resolved_args)
+        output = execution["text"]
+        if not execution["ok"]:
+            output = f"[{execution['status']}] {output}"
         return step_idx, output
     except Exception as e:
         return step_idx, f"ERROR: {e}"
@@ -149,6 +154,8 @@ def chain_tools(steps: str, data: str = "", parallel: bool = True) -> str:
 
     if not isinstance(plan, list):
         return "ERROR: steps must be a JSON array"
+    if not plan or len(plan) > _MAX_STEPS:
+        return f"ERROR: pipeline must contain 1..{_MAX_STEPS} steps"
 
     # Validate all tools exist
     for i, step in enumerate(plan):
@@ -156,6 +163,8 @@ def chain_tools(steps: str, data: str = "", parallel: bool = True) -> str:
             return f"ERROR: step {i} must be an object with 'tool' key"
         if step["tool"] not in TOOLS:
             return f"ERROR: unknown tool '{step['tool']}' at step {i}"
+        if step["tool"] in _RECURSIVE_TOOLS:
+            return f"ERROR: recursive/state-mutating tool '{step['tool']}' is not allowed in a pipeline"
 
     # Build dependency graph
     dependencies, dependents = _build_dag(plan)
@@ -168,7 +177,10 @@ def chain_tools(steps: str, data: str = "", parallel: bool = True) -> str:
     
     # Run level by level
     for level_idx, level in enumerate(levels):
-        if parallel and len(level) > 1:
+        can_parallelize = parallel and len(level) > 1 and all(
+            TOOLS[plan[idx]["tool"]].get("parallel_safe", False) for idx in level
+        )
+        if can_parallelize:
             # Run all steps in this level concurrently
             async def run_level():
                 tasks = [_run_step(idx, plan[idx], data, results) for idx in level]
@@ -187,7 +199,10 @@ def chain_tools(steps: str, data: str = "", parallel: bool = True) -> str:
                         resolved_args[k] = _resolve(v, prev_output, data, results)
                     else:
                         resolved_args[k] = v
-                output = run_tool(plan[idx]["tool"], resolved_args)
+                execution = execute_tool(plan[idx]["tool"], resolved_args)
+                output = execution["text"]
+                if not execution["ok"]:
+                    output = f"[{execution['status']}] {output}"
                 level_results.append((idx, output))
         
         # Collect results

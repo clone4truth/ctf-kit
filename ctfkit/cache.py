@@ -7,6 +7,7 @@ are stored. Thread-safe via a single lock; a global lock is fine at this scale
 
 import json
 import threading
+from pathlib import Path
 from collections import OrderedDict
 
 MAX_SIZE = 256
@@ -16,7 +17,16 @@ stats = {"hits": 0, "misses": 0, "evictions": 0}
 
 
 def _key(name: str, args: dict) -> str:
-    return name + ":" + json.dumps(args, sort_keys=True, default=str)
+    enriched = dict(args)
+    for key, value in args.items():
+        if isinstance(value, str) and (key == "file" or key.endswith("path")):
+            path = Path(value)
+            try:
+                stat = path.stat()
+                enriched[f"__file_identity_{key}"] = [stat.st_size, stat.st_mtime_ns]
+            except OSError:
+                pass
+    return name + ":" + json.dumps(enriched, sort_keys=True, default=str)
 
 
 def get(name: str, args: dict) -> str | None:

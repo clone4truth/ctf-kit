@@ -2,7 +2,7 @@
 
 @memory/_index.md
 
-CTF toolkit: 125 tools (encoding, crypto, stego, forensics, web, rev, pwn,
+CTF toolkit: 210 tools (encoding, crypto, stego, forensics, web, rev, pwn,
 osint, misc) as an MCP server (`ctf-tools`, registered in `.mcp.json`) plus a REST
 API server (`server.py`) with Swagger UI at `/docs`.
 
@@ -30,23 +30,33 @@ API server (`server.py`) with Swagger UI at `/docs`.
    output that may contain the answer.
 5. **Save memory after solving:**
    Use `remember_challenge` (MCP tool) or CLI:
-   `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked"`
+   `python scripts/remember.py --title "..." --tool <tool> --flag "..." --note "what worked" --problem "challenge description" --commands "actual commands used"`
+   **ALWAYS pass** `problem=` with the challenge problem statement and
+   `commands=` with the actual terminal commands you used.
    Always save when you recover a flag — this generates a reusable skill and a
-   **writeup/POC** at `writeups/<category>/` with step-by-step + terminal/BurpSuite
-   commands per category.
-6. **Augment the writeup**: edit `writeups/<category>/<date>_<slug>.md` with the
-   exact steps you used (commands, offsets, payloads) — the writeup = your
-   best/fastest technique.
+   **writeup/POC** at `writeups/<category>/` with:
+   - Problem Description (challenge statement)
+   - PoC Walkthrough (Step-by-Step)
+   - Actual Terminal Commands used
+   - Burp Suite PoC (web only)
+   - Evidence & Flag
+6. **Augment the writeup** if needed: edit `writeups/<category>/<date>_<slug>.md` with
+   exact payloads, offsets, and CVEs.
 7. **Reusable technique? Add a tool.** Scaffold + auto-register (MCP + UI, no
    config change): `python scripts/new_tool.py --name <snake_case> --category <cat>
    --summary "..." --params "a:str,b:int"` then implement
    `ctfkit/modules/<name>.py`.
-8. **Verify:** `python tests/test_smoke.py` (expect all OK).
+8. **Self-Improvement Tools (MCP):**
+   - `smart_tool_recommend`: AI recommendation from historical solve win rates and fast-paths.
+   - `self_improve_report`: status of learned technique patterns, tool ELO ratings, and shortcuts.
+   - `optimize_workflow`: category-specific optimal execution order.
+   - `self_diagnose`: tool health, failure rate analysis, and coverage score.
+9. **Verify:** `python tests/test_smoke.py` (expect all OK).
 
 ## Testing & validation
 
 - `python tests/gen_testdata.py` regenerates `testdata/` demo files.
-- `python tests/test_smoke.py` — 101 smoke tests over all tools.
+- `python tests/test_smoke.py` — 117 smoke scenarios with PASS/XFAIL separation.
 - `python tests/test_mcp.py` — MCP handshake check.
 - REST API runs on port **8765** (8000 is blocked on this machine).
 

@@ -1,0 +1,12 @@
+[
+  {"id":"encoding-base64-001","category":"encoding","tool":"decode_base","args":{"encoded":"cGljb0NURntldmFsX2ZpeHR1cmV9","base":64},"expected_flag":"picoCTF{eval_fixture}","max_tool_calls":1},
+  {"id":"crypto-xor-001","category":"crypto","tool":"xor_keyed","args":{"data_hex":"2d272a2c30332439142e3d2a2736","key_hex":"4b"},"expected_flag":"flag{xor_eval}","max_tool_calls":1},
+  {"id":"stego-lsb-001","category":"stego","tool":"stego_lsb","args":{"image_path":"testdata/lsb.png","max_bytes":64},"expected_flag":"flag{lsb_hidden}","max_tool_calls":1},
+  {"id":"forensics-pcap-http-001","category":"forensics","tool":"pcap_http","args":{"pcap_path":"testdata/test.pcap","max_flows":5},"expected_flag":"flag{http_extracted}","max_tool_calls":1},
+  {"id":"web-jwt-001","category":"web","tool":"jwt_decode","args":{"token":"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJmbGFnIjoiZmxhZ3tqd3R9In0.abc"},"expected_flag":"flag{jwt}","max_tool_calls":1},
+  {"id":"rev-pyc-001","category":"rev","tool":"pyc_magic_info","args":{"pyc_path_or_hex":"a70d0d0a000000000000000000000000"},"expected_contains":"Detected Ver: Python 3.11","max_tool_calls":1},
+  {"id":"pwn-debruijn-001","category":"pwn","tool":"debruijn","args":{"length":24},"expected_contains":"aaaabaaacaaadaaaeaaafaaa","max_tool_calls":1},
+  {"id":"osint-geohash-001","category":"osint","tool":"geohash_decode","args":{"geohash":"u4pruydqqvj"},"expected_contains":"center: 57.649111, 10.407440","max_tool_calls":1},
+  {"id":"misc-flag-001","category":"misc","tool":"extract_flags_tool","args":{"text":"proof: flag{misc_eval}"},"expected_flag":"flag{misc_eval}","max_tool_calls":1},
+  {"id":"encoding-layered-002","category":"encoding","tool":"decode_cascade","args":{"data":"Wm14aFozdHNZWGxsY21Wa1gySnNhVzVrZlE9PQ==","max_depth":4},"expected_flag":"flag{layered_blind}","max_tool_calls":1,"difficulty":"multi-step"}
+]

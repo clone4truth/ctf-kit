@@ -290,10 +290,10 @@ def decode_zero_width(text: str) -> str:
     found_chars = [c for c in text if c in _ZW_MAP]
     if not found_chars:
         return "No zero-width unicode characters found in the input text."
-    
+
     unique_chars = sorted(set(found_chars), key=lambda c: found_chars.index(c))
     summary = f"Found {len(found_chars)} zero-width characters ({', '.join(_ZW_MAP[c] for c in unique_chars)})."
-    
+
     results = [summary]
     # Try binary permutations if 2 distinct chars
     if len(unique_chars) == 2:
@@ -342,10 +342,10 @@ def decode_chain(data: str, max_depth: int = 8) -> str:
     :param max_depth: max depth
     """
     from ..flagmeta import detect_flag
-    
+
     current = data.strip()
     history = [f"Step 0 (raw): {current[:80]}..."]
-    
+
     transforms = [
         ("Base64", lambda s: from_b64(s).decode("latin-1")),
         ("Base64-URL", lambda s: base64.urlsafe_b64decode(s + "=" * (-len(s) % 4)).decode("latin-1")),
@@ -356,16 +356,16 @@ def decode_chain(data: str, max_depth: int = 8) -> str:
         ("Zlib-Hex", lambda s: zlib.decompress(bytes.fromhex(re.sub(r"[^0-9a-fA-F]", "", s))).decode("latin-1") if re.fullmatch(r"[0-9a-fA-F\s]+", s) and len(s) >= 8 else ""),
         ("Rot13", lambda s: s.translate(str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm"))),
     ]
-    
+
     flag = detect_flag(current)
     if flag:
         return f"Flag detected at step 0!\nFlag: {flag}\nData: {current}"
-    
+
     seen = {current}
     for step in range(1, max_depth + 1):
         best_candidate = None
         best_name = ""
-        
+
         for name, fn in transforms:
             try:
                 cand = fn(current)
@@ -382,19 +382,19 @@ def decode_chain(data: str, max_depth: int = 8) -> str:
                         break
             except Exception:
                 pass
-        
+
         if not best_candidate:
             break
-        
+
         seen.add(best_candidate)
         current = best_candidate.strip()
         history.append(f"Step {step} [{best_name}]: {current[:80]}" + ("..." if len(current) > 80 else ""))
-        
+
         flag = detect_flag(current)
         if flag:
             history.append(f"\n🏆 FLAG RECOVERED: {flag}")
             break
-    
+
     return "\n".join(history) + f"\n\nFinal Text:\n{current}"
 
 
@@ -467,3 +467,359 @@ def decode_cascade(data: str, max_depth: int = 8) -> str:
 def _zlib_try(data: bytes) -> bytes:
     import zlib
     return zlib.decompress(data)
+
+
+@tool(category="encoding")
+def decode_custom_base64(ciphertext: str, alphabet: str) -> str:
+    """Decode base64 ciphertext encoded with a custom 64-character alphabet.
+
+    :param ciphertext: The encoded base64 string
+    :param alphabet: The custom 64-character substitution table (e.g. reverse, shuffled, or leet)
+    """
+    import base64
+    clean_alpha = alphabet.strip()
+    if len(clean_alpha) != 64:
+        return f"ERROR: Custom alphabet must be exactly 64 characters long (received {len(clean_alpha)} chars)."
+
+    std_alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    trans = str.maketrans(clean_alpha, std_alpha)
+
+    clean_cipher = ciphertext.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+    # Preserve padding '='
+    unpadded = clean_cipher.rstrip("=")
+    pad_len = len(clean_cipher) - len(unpadded)
+
+    translated = unpadded.translate(trans) + ("=" * pad_len)
+
+    try:
+        raw = base64.b64decode(translated)
+        try:
+            return f"Decoded Text (UTF-8):\n{raw.decode('utf-8')}\n\nHex:\n{raw.hex()}"
+        except UnicodeDecodeError:
+            return f"Decoded Bytes (Latin-1 / Binary):\n{raw.decode('latin-1', errors='replace')}\n\nHex:\n{raw.hex()}"
+    except Exception as ex:
+        return f"ERROR: Failed to decode base64: {ex}"
+
+
+@tool(category="encoding")
+def decode_quoted_printable_uu(data: str, mode: str = "auto") -> str:
+    """Decode Quoted-Printable (=3D, =20) or UUencoded (begin 644 ...) data streams.
+
+    :param data: The encoded string
+    :param mode: 'auto', 'quoted_printable', or 'uuencode'
+    """
+    import binascii
+    import quopri
+
+    mode_clean = mode.lower().strip()
+    results = []
+
+    # 1. Quoted printable
+    if mode_clean in ("auto", "quoted_printable", "qp"):
+        try:
+            qp_dec = quopri.decodestring(data.encode("utf-8"))
+            results.append(f"=== Quoted-Printable Decoded ===\n{qp_dec.decode('utf-8', errors='replace')}")
+        except Exception as ex:
+            if mode_clean == "quoted_printable":
+                results.append(f"Quoted-Printable error: {ex}")
+
+    # 2. UUEncode
+    if mode_clean in ("auto", "uuencode", "uu"):
+        try:
+            # Strip header 'begin ...' and footer 'end'
+            lines = data.strip().splitlines()
+            uu_lines = [l for l in lines if not l.startswith("begin ") and l.strip() != "end" and l.strip() != "`"]
+            uu_payload = "\n".join(uu_lines)
+            decoded = binascii.a2b_uu(uu_payload)
+            results.append(f"=== UUDecode Decoded ===\n{decoded.decode('utf-8', errors='replace')}")
+        except Exception as ex:
+            if mode_clean == "uuencode":
+                results.append(f"UUDecode error: {ex}")
+
+    if not results:
+        return "ERROR: Could not decode data with specified mode."
+    return "\n\n".join(results)
+
+
+@tool(category="encoding")
+def tap_code(data: str, mode: str = "decode") -> str:
+    """Encode or decode Tap Code (Polybius 5x5 grid with K replaced by C).
+
+    :param data: Text or tap dots (e.g. '. ... .. ..' -> 'HE')
+    :param mode: 'decode' (dots to text) or 'encode' (text to dots)
+    """
+    GRID = [
+        ['A', 'B', 'C', 'D', 'E'],
+        ['F', 'G', 'H', 'I', 'J'],
+        ['L', 'M', 'N', 'O', 'P'],
+        ['Q', 'R', 'S', 'T', 'U'],
+        ['V', 'W', 'X', 'Y', 'Z']
+    ]
+
+    CHAR_MAP = {}
+    for r in range(5):
+        for c in range(5):
+            CHAR_MAP[GRID[r][c]] = (r + 1, c + 1)
+    CHAR_MAP['K'] = (1, 3) # K = C
+
+    mode_clean = mode.lower().strip()
+    if mode_clean == "encode":
+        out = []
+        for ch in data.upper():
+            if ch in CHAR_MAP:
+                r, c = CHAR_MAP[ch]
+                out.append(f"{'.' * r} {'.' * c}")
+            elif ch == ' ':
+                out.append("/")
+        return " ".join(out)
+    else:
+        # Decode: format can be pairs of dot counts like '. ...  .. ..' or '1 3  2 2' or '13 22'
+        tokens = data.strip().replace("/", " / ").split()
+        res = []
+        i = 0
+        while i < len(tokens):
+            t = tokens[i]
+            if t == "/":
+                res.append(" ")
+                i += 1
+                continue
+
+            # If format is '.. ...'
+            if set(t) == {'.'}:
+                if i + 1 < len(tokens) and set(tokens[i+1]) == {'.'}:
+                    r = len(t)
+                    c = len(tokens[i+1])
+                    if 1 <= r <= 5 and 1 <= c <= 5:
+                        res.append(GRID[r-1][c-1])
+                    i += 2
+                    continue
+            # If format is numbers '1 3'
+            elif t.isdigit():
+                if len(t) == 2:
+                    r, c = int(t[0]), int(t[1])
+                    if 1 <= r <= 5 and 1 <= c <= 5:
+                        res.append(GRID[r-1][c-1])
+                elif len(t) == 1 and i + 1 < len(tokens) and tokens[i+1].isdigit():
+                    r, c = int(t), int(tokens[i+1])
+                    if 1 <= r <= 5 and 1 <= c <= 5:
+                        res.append(GRID[r-1][c-1])
+                    i += 2
+                    continue
+            i += 1
+        return f"Tap Code Decoded: {''.join(res)}"
+
+
+@tool(category="encoding")
+def linux_octal_escape_decode(data: str) -> str:
+    """Decode Linux shell octal escape sequences (e.g. \\146\\154\\141\\147), hex escapes (\\x66), and unicode.
+
+    :param data: Obfuscated string containing octal/hex escape codes
+    """
+    import re
+    clean = data.strip()
+
+    # 1. Octal escapes: \040 or \146 or 146 154 141 147
+    def _repl_octal(m):
+        val = int(m.group(1), 8)
+        return chr(val) if val < 256 else m.group(0)
+
+    # Match \040, \146, \40
+    res_octal = re.sub(r"\\([0-3]?[0-7]{1,2}|[0-7]{3})", _repl_octal, clean)
+
+    # 2. Raw space-separated octal numbers: e.g. "146 154 141 147 173"
+    if re.fullmatch(r"[0-7]{2,3}(\s+[0-7]{2,3})+", clean):
+        try:
+            bytes_list = [int(tok, 8) for tok in clean.split()]
+            res_space_octal = bytes(bytes_list).decode("latin-1", errors="replace")
+            return f"Decoded Octal Stream:\n{res_space_octal}"
+        except Exception:
+            pass
+
+    # 3. Hex escapes: \x66\x6c\x61\x67
+    def _repl_hex(m):
+        return chr(int(m.group(1), 16))
+    res_hex = re.sub(r"\\x([0-9a-fA-F]{2})", _repl_hex, res_octal)
+
+    # 4. Unicode escapes: \u0066
+    def _repl_uni(m):
+        return chr(int(m.group(1), 16))
+    res_final = re.sub(r"\\u([0-9a-fA-F]{4})", _repl_uni, res_hex)
+
+    return (
+        f"Decoded Shell Escape Output:\n"
+        f"{res_final}"
+    )
+
+
+@tool(category="encoding")
+def a1z26_cipher(data: str, mode: str = "decode") -> str:
+    """Encode or decode A1Z26 cipher (1=A, 2=B, ..., 26=Z).
+
+    :param data: Text string (encode) or numbers (e.g. '6-12-1-7' or '6 12 1 7' to decode)
+    :param mode: 'decode' (numbers to letters) or 'encode' (letters to numbers)
+    """
+    import re
+    mode_clean = mode.lower().strip()
+    if mode_clean == "encode":
+        out = []
+        for ch in data.upper():
+            if 'A' <= ch <= 'Z':
+                out.append(str(ord(ch) - ord('A') + 1))
+            elif ch == ' ':
+                out.append("/")
+            else:
+                out.append(ch)
+        return "-".join(out)
+    else:
+        # Decode: handles hyphens, commas, spaces
+        tokens = re.split(r"[\s\-_,]+", data.strip())
+        res = []
+        for t in tokens:
+            if t == "/":
+                res.append(" ")
+            elif t.isdigit():
+                val = int(t)
+                if 1 <= val <= 26:
+                    res.append(chr(ord('A') + val - 1))
+                else:
+                    res.append(f"[{t}]")
+            elif t:
+                res.append(t)
+        return f"A1Z26 Decoded: {''.join(res)}"
+
+
+@tool(category="encoding")
+def baudot_code(data: str, mode: str = "decode") -> str:
+    """Decode or encode 5-bit Baudot / ITA2 teleprinter code.
+
+    :param data: 5-bit binary tokens (e.g. '11000 10000 10010') or text to encode
+    :param mode: 'decode' or 'encode'
+    """
+    LETTERS = {
+        "00000": "", "00100": " ", "10111": "Q", "10011": "W", "00001": "E",
+        "01010": "R", "10000": "T", "10101": "Y", "00111": "U", "00110": "I",
+        "11000": "O", "10110": "P", "00011": "A", "00101": "S", "01001": "D",
+        "01101": "F", "11010": "G", "10100": "H", "01011": "J", "01111": "K",
+        "10010": "L", "10001": "Z", "10111": "X", "01110": "C", "11110": "V",
+        "11001": "B", "10000": "N", "01100": "M", "11011": "<FIGS>", "11111": "<LTRS>"
+    }
+
+    mode_clean = mode.lower().strip()
+    if mode_clean == "decode":
+        bits = [b.strip() for b in data.replace(",", " ").split() if b.strip()]
+        res = []
+        for b in bits:
+            res.append(LETTERS.get(b, "?"))
+        return f"Baudot ITA2 Decoded: {''.join(res)}"
+    else:
+        REV = {v: k for k, v in LETTERS.items() if v and not v.startswith("<")}
+        out = [REV.get(ch, "?????") for ch in data.upper() if ch in REV or ch == " "]
+        return " ".join(out)
+
+
+@tool(category="encoding")
+def punycode_decode(domain_or_text: str) -> str:
+    """Decode or encode RFC 3492 Punycode / Internationalized Domain Names (IDN, xn--...).
+
+    :param domain_or_text: Punycode encoded string (e.g. 'xn--flg-tka.com') or unicode text
+    """
+    clean = domain_or_text.strip()
+    results = []
+
+    # Try IDNA decoding
+    try:
+        dec_idna = clean.encode("ascii").decode("idna")
+        results.append(f"IDNA Decoded Domain: {dec_idna}")
+    except Exception:
+        pass
+
+    # Try raw punycode decoding
+    raw_puny = clean.replace("xn--", "")
+    try:
+        dec_raw = raw_puny.encode("ascii").decode("punycode")
+        results.append(f"Punycode Decoded   : {dec_raw}")
+    except Exception:
+        pass
+
+    if not results:
+        # Try encoding instead
+        try:
+            enc = clean.encode("idna").decode("ascii")
+            return f"IDNA / Punycode Encoded: {enc}"
+        except Exception as ex:
+            return f"Punycode processing failed: {ex}"
+
+    return "\n".join(results)
+
+
+@tool(category="encoding")
+def dna_encoding(data: str, mode: str = "decode") -> str:
+    """Decode or encode DNA nucleotide bases (A, C, G, T) to binary / ASCII text.
+
+    :param data: DNA sequence (e.g. 'ACTG...') or ASCII text
+    :param mode: 'decode' (DNA to text) or 'encode' (text to DNA)
+    """
+    DNA_MAP = {"A": "00", "C": "01", "G": "10", "T": "11"}
+    REV_MAP = {"00": "A", "01": "C", "10": "G", "11": "T"}
+
+    clean = data.strip().upper().replace(" ", "").replace("\n", "")
+    mode_clean = mode.lower().strip()
+
+    if mode_clean == "decode":
+        bits = "".join(DNA_MAP.get(c, "") for c in clean)
+        if len(bits) % 8 != 0:
+            bits = bits[:len(bits) - (len(bits) % 8)]
+        if not bits:
+            return "ERROR: No valid DNA bases (A, C, G, T) found in data."
+        byte_arr = [int(bits[i:i+8], 2) for i in range(0, len(bits), 8)]
+        raw = bytes(byte_arr)
+        try:
+            return f"DNA Decoded Text (UTF-8):\n{raw.decode('utf-8')}\n\nHex:\n{raw.hex()}"
+        except UnicodeDecodeError:
+            return f"DNA Decoded Raw (Latin-1):\n{raw.decode('latin-1', errors='replace')}\n\nHex:\n{raw.hex()}"
+    else:
+        raw_b = data.encode("utf-8")
+        bits = "".join(f"{b:08b}" for b in raw_b)
+        dna_seq = "".join(REV_MAP[bits[i:i+2]] for i in range(0, len(bits), 2))
+        return f"DNA Encoded Sequence:\n{dna_seq}"
+
+
+@tool(category="encoding")
+def base62_decode_encode(data: str, mode: str = "decode") -> str:
+    """Encode or decode Base62 (0-9, a-z, A-Z) large integers and byte streams.
+
+    :param data: String or integer to encode/decode
+    :param mode: 'decode' or 'encode'
+    """
+    B62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    mode_clean = mode.lower().strip()
+
+    if mode_clean == "decode":
+        clean = data.strip()
+        num = 0
+        for ch in clean:
+            idx = B62_CHARS.find(ch)
+            if idx == -1:
+                return f"ERROR: Invalid Base62 character '{ch}'"
+            num = num * 62 + idx
+
+        # Convert integer to bytes
+        num_len = (num.bit_length() + 7) // 8 or 1
+        raw_bytes = num.to_bytes(num_len, "big")
+        try:
+            return f"Base62 Decoded:\n  Integer : {num}\n  Text    : {raw_bytes.decode('utf-8')}\n  Hex     : {raw_bytes.hex()}"
+        except UnicodeDecodeError:
+            return f"Base62 Decoded:\n  Integer : {num}\n  Raw Hex : {raw_bytes.hex()}"
+    else:
+        try:
+            num = int(data.strip())
+        except ValueError:
+            num = int.from_bytes(data.encode("utf-8"), "big")
+
+        if num == 0:
+            return "0"
+        res = []
+        while num > 0:
+            res.append(B62_CHARS[num % 62])
+            num //= 62
+        return "".join(reversed(res))

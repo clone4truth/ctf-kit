@@ -3,127 +3,80 @@
 ```text
  ██████╗████████╗███████╗    ██╗  ██╗██╗████████╗
 ██╔════╝╚══██╔══╝██╔════╝    ██║ ██╔╝██║╚══██╔══╝
-██║        ██║   █████╗      █████╔╝ ██║   ██║   
-██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
-╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
- ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
+██║        ██║   █████╗      █████╔╝ ██║   ██║
+██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║
+╚██████╗   ██║   ██║         ██║  ██╗██║   ██║
+ ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝
     ⚡ AI-POWERED CTF & CYBERSECURITY ENGINE ⚡
 ```
 
-# CTF KIT — AI-Powered Security & CTF Engine
+# CTF KIT
 
-**Modular cybersecurity toolkit covering 139 specialized tools across 9 categories.**  
-*Designed specifically for AI Agents (Claude Desktop, Cursor, Cline, OpenCode, Copilot) via MCP & Headless REST API.*
+**Modular cybersecurity toolkit covering 210 specialized tools across 9 categories.**
+
+Built for AI agents and direct automation through MCP and a headless REST API.
 
 </div>
 
----
+## Highlights
 
-## 🏛️ MCP Agent & Central Gateway Architecture
+- 210 tools for encoding, crypto, stego, forensics, web, reverse engineering,
+  pwn, OSINT, and general CTF workflows.
+- Shared execution engine for MCP, REST, pipelines, and autonomous solving.
+- Hypothesis-driven planning, CVE research, bounded attempts, and adaptive pivots.
+- Structured execution statuses instead of ambiguous text-only success checks.
+- Evidence-aware flag extraction with confidence scoring and false-positive filtering.
+- Verified challenge memory, reproducible writeups, and deterministic evaluations.
+- Automatic safety classification with no environment setup required.
 
-CTF KIT follows the modern **Central FastAPI Gateway + Thin MCP Bridge** pattern. A single central server (`server.py`) manages execution, telemetry, thread pools, and category routing, while `mcp_server.py` operates as an ultra-fast JSON-RPC bridge with resilient local fallback.
+## Architecture
+
+MCP, REST, pipelines, and the autonomous solver use the same canonical
+executor in `ctfkit/registry.py`. This avoids duplicated execution, inconsistent
+timeouts, and false-success telemetry.
 
 ```mermaid
-graph TB
-    subgraph Clients ["🤖 AI Clients & Orchestrators"]
-        A1["<b>Claude Desktop / Code</b><br/><code>AI Pair Programmer</code>"]
-        A2["<b>Cursor / Windsurf / VS Code</b><br/><code>IDE AI Assistant</code>"]
-        A3["<b>OpenCode / Cline / Copilot</b><br/><code>Autonomous Agent</code>"]
-        A4["<b>Swagger UI / Curl</b><br/><code>Direct HTTP Client</code>"]
-    end
-
-    subgraph Bridge ["🔌 Thin MCP Client Bridge"]
-        MCP["<b>mcp_server.py</b><br/><i>JSON-RPC 2.0 (stdio)</i><br/>⚡ Fast proxy to Gateway + Local Fallback"]
-    end
-
-    subgraph Gateway ["🌐 Central FastAPI Gateway (server.py : Port 8765)"]
-        REST["<b>FastAPI Core Engine & Router</b><br/><code>/api/{category}/{tool}</code> • <code>/api/run</code> • <code>/docs</code>"]
-        REG["⚙️ <b>Tool Registry</b> (<code>@tool</code>)<br/>Auto Introspection • Type Coercion • Schema Generator"]
-        LOG["📊 <b>Telemetry & Dashboard</b><br/>Rich Live UI • Execution Timers • Status Monitor"]
-    end
-
-    subgraph SecurityModules ["🛠️ 123 Specialized Security Tools (9 Categories)"]
-        direction TB
-        subgraph TopCat [" "]
-            M1["🔤 <b>Encoding</b> (13)<br/><code>POST /api/encoding/*</code>"]
-            M2["🔐 <b>Crypto</b> (36)<br/><code>POST /api/crypto/*</code>"]
-            M3["🖼️ <b>Stego</b> (11)<br/><code>POST /api/stego/*</code>"]
-        end
-        subgraph MidCat [" "]
-            M4["🔍 <b>Forensics</b> (13)<br/><code>POST /api/forensics/*</code>"]
-            M5["🌐 <b>Web</b> (20)<br/><code>POST /api/web/*</code>"]
-            M6["⚙️ <b>Reverse</b> (4)<br/><code>POST /api/rev/*</code>"]
-        end
-        subgraph BotCat [" "]
-            M7["💥 <b>Pwn</b> (8)<br/><code>POST /api/pwn/*</code>"]
-            M8["🛰️ <b>OSINT</b> (5)<br/><code>POST /api/osint/*</code>"]
-            M9["🎯 <b>Misc & Memory</b> (13)<br/><code>POST /api/misc/*</code>"]
-        end
-    end
-
-    subgraph MemoryLayer ["📝 Memory & Skill Automation"]
-        MEM["🧠 <b>Persistent Memory</b><br/><code>memory/*.md</code> & <code>_index.md</code>"]
-        SKILL["🚀 <b>Auto-Skill Generator</b><br/><code>~/.agents/skills/ctf-*</code> + bundled <code>skills/*</code>"]
-        WRITEUP["📄 <b>Auto-POC Writeups</b><br/><code>writeups/&lt;category&gt;/*.md</code>"]
-    end
-
-    %% Client Connections
-    A1 -->|stdio JSON-RPC| MCP
-    A2 -->|stdio JSON-RPC| MCP
-    A3 -->|stdio JSON-RPC| MCP
-    A4 -->|HTTP REST| REST
-
-    %% MCP Bridge to Gateway
-    MCP ==>|HTTP POST /api/...| REST
-    MCP -.->|Resilient Fallback| REG
-
-    %% Gateway Routing
-    REST ==> REG
-    REG <--> LOG
-
-    %% Core to Modules
-    REG -.-> M1 & M2 & M3
-    REG -.-> M4 & M5 & M6
-    REG -.-> M7 & M8 & M9
-
-    %% Automation & Persistence
-    M9 ==>|Remember Challenge| MEM
-    MEM ==>|Scaffold Skill| SKILL
-    MEM ==>|Generate POC| WRITEUP
-
-    %% Visual Styling & Colors
-    classDef clientStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef bridgeStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
-    classDef gatewayStyle fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f0fdf4;
-    classDef moduleStyle fill:#2e1065,stroke:#a855f7,stroke-width:1.5px,color:#faf5ff;
-    classDef memStyle fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#fff1f2;
-
-    class A1,A2,A3,A4 clientStyle;
-    class MCP bridgeStyle;
-    class REST,REG,LOG gatewayStyle;
-    class M1,M2,M3,M4,M5,M6,M7,M8,M9 moduleStyle;
-    class MEM,SKILL,WRITEUP memStyle;
+flowchart LR
+    C["MCP / REST / Agent"] --> E["Canonical Executor"]
+    E --> P["Argument + Safety Policy"]
+    P --> T["210 CTF Tools"]
+    T --> R["Structured Result"]
+    R --> F["Ranked Flag Candidates"]
+    R --> M["Verified Memory / Writeup"]
 ```
 
----
+Every execution reports one explicit status: `success`, `no_finding`,
+`unavailable`, `invalid_input`, `timeout`, `blocked`, or `error`. MCP additionally
+publishes structured output and read-only/destructive/open-world annotations.
 
-## 🚀 Installation & Setup
+The autonomous flow is hypothesis-driven:
 
-### Prerequisites
+1. Profile the challenge and artifacts.
+2. Recall verified knowledge and research known products/CVEs.
+3. Rank hypotheses and assign a bounded attempt budget.
+4. Execute the smallest relevant tool chain.
+5. Pivot on `no_finding`, unavailable dependencies, or repeated failure.
+6. Validate flag candidates with confidence and supporting evidence.
+7. Persist learning only after a verified solve.
+
+See [`docs/architecture.md`](docs/architecture.md) for the full execution and
+trust-boundary design.
+
+## Installation
+
+### Requirements
+
 - **Python**: 3.10+ (tested on Python 3.10, 3.11, 3.12, 3.13)
 - **Git**: Installed and available in PATH
 
----
+### 1. Clone
 
-### Step 1: Clone the Repository
 ```bash
 git clone https://github.com/clone4truth/ctf-kit.git
 cd ctf-kit
 ```
 
----
-
-### Step 2: Create & Activate Virtual Environment
+### 2. Create a virtual environment
 
 **Windows (PowerShell):**
 ```powershell
@@ -143,78 +96,93 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
----
+### 3. Install dependencies
 
-### Step 3: Install Dependencies
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
----
+### 4. Validate the installation
 
-### Step 4: Generate Test Assets & Validate Installation
 ```bash
 # 1. Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
 python tests/gen_testdata.py
 
-# 2. Run smoke tests (verify all 128 tools)
+# 2. Run 117 configured smoke scenarios
 python tests/test_smoke.py
 
 # 3. Verify MCP stdio JSON-RPC handshake
 python tests/test_mcp.py
+
+# 4. Run deterministic flag-recovery evaluation
+python scripts/eval_core.py
+
+# 5. Run unit and security regression tests
+python -m pytest -q
 ```
 
----
+## Run CTF KIT
 
-## ⚡ Running the Services
+### REST API
 
-### 🌐 1. Start Main REST API Server (FastAPI + Swagger UI)
 ```bash
 python server.py
 ```
-* **Swagger UI Documentation:** [http://localhost:8765/docs](http://localhost:8765/docs)
-* **ReDoc Interface:** [http://localhost:8765/redoc](http://localhost:8765/redoc)
-* **Telemetry & Health Endpoint:** [http://localhost:8765/health](http://localhost:8765/health)
-* **Tool Explorer Dashboard:** [http://localhost:8765/dashboard](http://localhost:8765/dashboard)
 
-> **Auth (optional):** set `CTFKIT_API_TOKEN=...` → all `/api/*` calls require `Authorization: Bearer <token>`.
-> **External tools:** missing CLIs auto-try a Kali Docker container (`CTFKIT_DOCKER=0` disables, `CTFKIT_DOCKER_IMAGE` overrides the image, `CTFKIT_DOCKER_PULL=1` auto-pulls).
-> **LLM steering (autonomous_solve):** set `CTFKIT_LLM_ENDPOINT` (+ optional `CTFKIT_LLM_MODEL`, `CTFKIT_LLM_KEY`) to an OpenAI-compatible chat endpoint; any failure falls back to the heuristic.
+- **Swagger UI:** [http://localhost:8765/docs](http://localhost:8765/docs)
+- **ReDoc:** [http://localhost:8765/redoc](http://localhost:8765/redoc)
+- **Health:** [http://localhost:8765/health](http://localhost:8765/health)
+- **Tool explorer:** [http://localhost:8765/dashboard](http://localhost:8765/dashboard)
 
-### 🔌 2. Run Headless MCP Server (for AI Agents)
+> **REST security:** loopback is the default. `CTFKIT_API_TOKEN` is mandatory
+> when binding to a non-loopback host and protects API and upload routes.
+>
+> **External dependencies:** wrappers do not install missing CLIs by default.
+> Installation runs only when a caller explicitly passes `auto=true`; no
+> environment setup is required. Docker fallback is
+> disabled unless `CTFKIT_DOCKER=1` and runs read-only without network access.
+>
+> **LLM steering:** `CTFKIT_LLM_ENDPOINT` must use HTTPS or loopback. Tool output
+> is not sent unless `CTFKIT_LLM_SHARE_OUTPUT=1` is explicitly enabled.
+
+Risky tools automatically run in killable worker processes. Their arguments
+travel over stdin rather than the process command line. No environment
+configuration is needed for normal lab or tournament use.
+
+### MCP server
+
 ```bash
 python mcp_server.py
 ```
 
----
+## MCP client setup
 
-## 🔌 Use with MCP Clients (Claude / Cursor / VS Code / OpenCode / Other Agents)
+### Register the MCP server
 
-### Auto-Install into App Config Folders
-
-Agent integration is NOT kept in repo dot-directories — no project-level agent
-config or plugin folders needed. On every `mcp_server.py` start (and
-via `python scripts/install_agents.py`), everything is installed idempotently
-into each agent CLI's own config folder:
+Starting `mcp_server.py` performs no implicit installation or configuration
+writes. Use the repository `.mcp.json`, configure the client manually, or run
+`python scripts/install_agents.py` explicitly when you want to update supported
+client configuration files.
 
 | Artifact | Repo source | Installed to |
 |---|---|---|
-| ctf-memory plugin | `plugins/ctf-memory.js` | `~/.config/opencode/plugins/` + `plugin` array (opencode); at runtime it also writes CTF skills to `~/.agents/skills` and `~/.claude/skills` |
-| `ctf-tools` MCP server | `mcp_server.py` (auto) | `~/.config/opencode/opencode.json` (`mcp`), `~/.claude.json`, `~/.cursor/mcp.json`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json` (`mcpServers`) |
+| ctf-memory plugin | `plugins/ctf-memory.js` | Supported agent plugin directories, only through the explicit installer |
+| `ctf-tools` MCP server | `mcp_server.py` | Supported MCP client configuration, only through the explicit installer |
 
 - **OS-aware**: uses `.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on Linux/macOS (falls back to the running interpreter if the venv is missing).
 - **Idempotent**: existing entries (other MCP servers, plugins, providers, project state) in every target config are preserved; missing configs are skipped.
 - Project-level `.mcp.json` (in this repo) still works for clients that prefer local configs — see `mcp.example.json` for the template.
 
-Manual registration for any other client (e.g. `claude_desktop_config.json` or `.cursor/mcp.json`):
+Manual registration on Linux/macOS (use the equivalent `.venv\Scripts\python.exe`
+path on Windows):
 
 ```json
 {
   "mcpServers": {
     "ctf-tools": {
-      "command": ".venv/Scripts/python",
-      "args": ["mcp_server.py"],
+      "command": "/absolute/path/to/ctf-kit/.venv/bin/python",
+      "args": ["/absolute/path/to/ctf-kit/mcp_server.py"],
       "env": {
         "PYTHONUNBUFFERED": "1"
       }
@@ -223,93 +191,118 @@ Manual registration for any other client (e.g. `claude_desktop_config.json` or `
 }
 ```
 
----
+## CTF workflow and memory
 
-## 🧠 Memory, Recall & Auto-Skill System
-
-CTF KIT features a persistent knowledge loop that turns every solved challenge or lab into permanent agent capability:
+CTF KIT can turn a verified solve into reproducible local memory and a writeup:
 
 ```
 [Challenge / Lab Input]
         │
         ├──▶ 1. Plan & Recall  : recall_knowledge / scripts/recall.py (Search past memory)
-        ├──▶ 2. Solve          : Execute via 123 MCP Tools
+        ├──▶ 2. Solve          : Execute via 210 MCP tools
         └──▶ 3. Remember       : remember_challenge / scripts/remember.py
                   │
                   ├──▶ memory/*.md                  (Indexed Challenge Memory)
-                  ├──▶ ~/.agents/skills/ctf-*        (Auto-Generated Agent Skills)
+                  ├──▶ ~/.agents/skills/ctf-*        (Optional: CTFKIT_AUTO_SKILLS=1)
                   └──▶ writeups/<category>/*.md     (Auto-Scaffolded POC Walkthroughs)
 ```
 
-### Tri-Fold Knowledge Asset
+### Persistence rules
+
 When you recover a flag and call `remember_challenge`:
+
 1. **Challenge Memory (`memory/`)**: Records target platform, tools used, recovered flag, and lessons learned. Automatically updates `memory/_index.md`.
-2. **Autonomous Agent Skills (`~/.agents/skills/` & `~/.claude/skills/`)**: Generates standardized `SKILL.md` files with YAML frontmatter. Cumulative additions are appended if a similar skill exists.
+2. **Autonomous Agent Skills (`~/.agents/skills/` & `~/.claude/skills/`)**: Disabled by default. Set `CTFKIT_AUTO_SKILLS=1` only after reviewing the solve evidence.
 3. **POC Writeup (`writeups/`)**: Scaffolds a reproducible writeup template populated with terminal commands, payload parameters, and BurpSuite workflows tailored to the challenge category.
 
-```powershell
-# Save memory directly via CLI or via MCP Tool remember_challenge:
-python scripts/remember.py --title "RSA Fermat Factorization" --category crypto --tool rsa_fermat --flag "flag{fermat_crack_ok}" --note "n was product of close primes; factored in 0 iterations"
+Synthetic/test titles are never persisted. Legacy aggregate learning with missing
+provenance is never used for recommendations. Rebuild a clean v2 state with
+`python scripts/rebuild_learning.py`; fixture solves remain visible but cannot
+change rankings or fast paths.
+
+```bash
+python scripts/remember.py \
+  --title "RSA Fermat Factorization" \
+  --category crypto \
+  --tool rsa_fermat \
+  --flag "flag{fermat_crack_ok}" \
+  --note "n was factored because its primes were close" \
+  --problem "RSA modulus n used two close primes" \
+  --commands "python solve.py"
 ```
 
----
+## Automatic safety policy
 
-## 🧰 Complete Tool Arsenal (139 Tools across 9 Categories)
+No environment setup is required. CTF KIT determines each tool's capability
+from registry metadata (`read_only`, `destructive`, `open_world`, and
+`safety_level`) and applies the matching policy automatically. External package
+installation requires an explicit `auto=true` tool argument. The autonomous
+solver always uses `auto=false`, so it never installs packages implicitly.
 
-| Category | Count | Tools & Descriptions |
-|---|---|---|
-| **encoding** | 13 | `decode_base` (Base2/8/16/32/36/58/62/64/85), `decode_base45`, `decode_base91`, `decode_chain` (auto-unpacker multi-layer), `decode_cascade` (Ciphey-style auto peel base64/hex/url/html/rot13/binary), `decode_zero_width`, `encode_zero_width`, `encode_url`, `encode_html_entities`, `encode_unicode_escapes`, `morse`, `brainfuck`, `decode_all` |
-| **crypto** | 40 | `rsa_wiener`, `rsa_fermat`, `rsa_common_modulus`, `rsa_hastad`, `rsa_parse_key`, `rsa_decrypt`, `rsa_small_e`, `xor_crib_drag`, `xor_brute`, `xor_keyed`, `lcg_solve`, `hash_length_extension`, `aes_gcm_nonce_reuse`, `ecc_point_ops`, `ecc_bsgs`, `paillier_keygen`, `paillier_decrypt`, `ecdsa_nonce_reuse` (recover nonce+private key from reused-k signatures), `mt19937_predict` (state recovery + next-output prediction), `pollard_p1` (smooth p-1 factoring), `pohlig_hellman` (small-factor discrete log), `caesar`, `atbash`, `affine`, `vigenere`, `beaufort`, `playfair`, `hill`, `railfence`, `columnar`, `bacon`, `rot47`, `frequency`, `vigenere_keylength`, `aes_crypt`, `aes_cbc_bitflip`, `hash_identify`, `hash_generate`, `hash_crack_common`, `external_crypto` (hashcat/john wrapper) |
-| **stego** | 12 | `png_fix_ihdr` (CRC dimension recovery), `stego_audio_wav` (LSB extraction), `stego_dtmf_detect` (keypad tones), `stego_lsb`, `stego_metadata`, `stego_channel`, `stego_xor_images`, `stego_png_chunks`, `stego_gif_frames`, `stego_compare`, `stego_jsteg` (JPEG entropy-decoder: JSteg LSBs of quantized DCT AC coefficients, exact coefficients, no DCT round-trip), `external_stego` (steghide/zsteg/outguess wrapper) |
-| **forensics** | 15 | `file_type`, `strings_extract`, `hexdump`, `carve` (15+ file signatures), `zlib_hunt`, `entropy_map`, `pcap_http` (PCAP/PCAPNG streams), `pcap_dns_exfil`, `pcap_usb_keystrokes`, `zip_fix_pseudo_encrypt`, `exif_gps_map`, `ntfs_ads` (ADS listing), `sqlite_reader` (table dump + flag scan, stdlib sqlite3), `pdf_analyze` (object/stream decompression + flag scan), `external_forensics` (binwalk/exiftool/foremost/volatility3 wrapper) |
-| **web** | 24 | `cve_research` (understand problem → find CVE from software/version → exploit plan via NVD + local KB), `cve_lookup` (single CVE: severity/desc/references/PoC links), `cve_search` (NVD keyword search by product+version), `ssti_payloads` (Jinja2/Twig/Smarty/SpEL/Thymeleaf/EJS/ERB), `sqli_payloads`, `command_injection_payloads`, `path_traversal_payloads`, `xxe_payloads`, `idor_payloads`, `deserialization_payloads`, `graphql_introspect` (schema dump), `oast_payload` (out-of-band callback templates: XXE/SSRF/SSTI/SQLi/Log4Shell), `file_upload_bypass`, `revshell_generator` (multi-language & base64/URL wrappers), `php_filter_chain`, `ssrf_obfuscator`, `jwt_key_confusion` (CVE-2015-9235), `jwt_decode`, `jwt_forge`, `http_request`, `payload_encoders`, `browser_agent` (headless Chrome: JS-rendered content, screenshot, forms, security headers), `external_web` (ffuf/gobuster/sqlmap/nikto/wfuzz wrapper) |
-| **rev** | 4 | `pe_info` (Windows PE32/PE32+ mitigations & sections), `elf_info` (Linux ELF header & symbols), `pyc_magic_info` (Python bytecode version identifier), `external_rev` (objdump/readelf/radare2/one_gadget wrapper) |
-| **pwn** | 8 | `checksec`, `rop_gadgets`, `fmtstr_payload_gen`, `pwn_template` (pwntools exploit scaffolding), `shellcode_multi` (Linux x86/x64, Win x86/x64, ARM), `shellcode_x64`, `debruijn`, `debruijn_find` |
-| **osint** | 9 | `dns_query` (A/AAAA/MX/NS/TXT/CNAME/SOA), `dns_reverse` (PTR lookup), `crtsh_subdomains` (CT logs), `geohash_decode`, `geocode` (Nominatim), `dork_generator` (Google/GitHub/Shodan dorks), `github_search` (grep.app code search), `whois_query` (port 43 + referral follow), `external_recon` (nmap/masscan/whatweb/dnsrecon wrapper) |
-| **misc** | 14 | `detect_challenge` (heuristics & platform classifier), `extract_flags_tool` (universal flag regex parser), `remember_challenge` (memory + skill + POC generator), `recall_knowledge` (semantic memory search), `triage_file` (unified file deep inspection), `analyze_target` + `select_tools` + `optimize_parameters` (decision engine), `scaffold_new_tool` (auto-registering tool scaffolding), `autonomous_solve` (self-driving agent: external-first strategy, live progress bars, optional LLM steering via `CTFKIT_LLM_*` env), `get_agent_status`, `reset_agent_memory`, `external_available` (installed external tools report) |
+`CTFKIT_SAFETY_MODE` remains available only as an optional lockdown override
+for operators who deliberately want to restrict a deployment.
 
----
+Only use network, exploitation, and scanning tools against systems you own or
+are explicitly authorized to test.
 
-## 📁 Project Structure
+## Tool categories
 
+| Category | Tools | Examples |
+|---|---:|---|
+| Crypto | 48 | RSA attacks, AES modes, XOR, hashes, ECC, PRNG attacks |
+| Web | 32 | HTTP, JWT, SQLi, SSTI, SSRF, upload bypass, CVE research |
+| Forensics | 26 | PCAP, carving, archives, SQLite, PDF, filesystem artifacts |
+| Misc and agent | 23 | planning, recall, orchestration, flag extraction, diagnostics |
+| Encoding | 22 | common bases, Morse, zero-width, Brainfuck, decode chains |
+| Stego | 18 | LSB, PNG chunks, image channels, audio, spectrograms |
+| Pwn | 16 | checksec, ROP, shellcode, format strings, ret2libc helpers |
+| OSINT | 14 | DNS, WHOIS, ASN, certificates, geolocation, search helpers |
+| Reverse engineering | 11 | ELF, PE, PYC, symbols, constants, binary searches |
+| **Total** | **210** | Available through MCP and REST |
+
+Use `GET /api/tools`, the Swagger UI, or MCP `tools/list` for the current
+per-tool schemas and descriptions.
+
+## Core capabilities
+
+- **Flag engine:** ranks candidates with confidence and filters common CSS/code
+  false positives without assuming a fixed prefix.
+- **Planning engine:** generates prioritized hypotheses and bounded execution
+  plans before attempting a challenge.
+- **Browser agent:** inspects rendered content, forms, links, screenshots, and
+  security headers for authorized web challenges.
+- **Linux analysis:** parses common system artifacts, histories, scheduled jobs,
+  capabilities, network data, and executable metadata.
+- **Smart cache:** caches deterministic results and invalidates file-backed keys
+  when file size or modification time changes.
+- **Health and telemetry:** exposes readiness checks, execution status, duration,
+  cache state, and redacted diagnostic history.
+
+## Validation status
+
+- 210 tools exposed through a successful MCP JSON-RPC handshake.
+- 117/117 configured smoke scenarios pass, including expected negative probes.
+- 8/8 unit and security regression tests pass.
+- Local quality benchmark: **10.0/10** — 9/9 category probes, 4/4 autonomous
+  flag-recovery cases, and zero known CSS/code false flags.
+- REST `/health` reports registry, memory, and test-data readiness checks.
+
+Run the complete local verification:
+
+```bash
+python -m pytest -q
+python tests/test_smoke.py
+python tests/test_mcp.py
+python scripts/eval_core.py
 ```
-ctf-kit/
-├── ctfkit/
-│   ├── logging.py          # LogBus & structured rich logging + live progress bars
-│   ├── registry.py         # @tool() decorator + run_tool + list_tools + auto type coercion + execution log (thread-safe)
-│   ├── cache.py            # LRU result cache (side-effectful tools excluded)
-│   ├── utils.py            # shared helpers: hex, english scoring, magic bytes, param introspection + descriptions
-│   ├── flagmeta.py         # flag detection/extraction + suggested tools per category
-│   └── modules/            # category implementations (encoding, crypto, stego, forensics, web, rev_pwn, osint, analyze, browser, external, agent)
-├── tests/                  # automated test suite & generators
-│   ├── gen_testdata.py     # generate test files (PCAP, PNG, audio WAV, ELF, PE)
-│   ├── test_smoke.py       # 101 smoke tests covering all tools
-│   ├── test_mcp.py         # MCP JSON-RPC stdio handshake & protocol test
-│   └── test_agent_categories.py  # 16 agent strategy/comprehension/e2e tests (CTF_E2E=0 skips e2e)
-├── scripts/                # automated workflow helpers (plan, recall, remember, new_tool, writeup, install_agents, add_param_docs, build)
-├── plugins/                # ctf-memory.js (auto-installed into all agent CLI configs by scripts/install_agents.py)
-├── skills/                 # bundled agent skills (e.g. 16-ai-llm-security) — auto-synced to ~/.agents/skills + ~/.claude/skills
-├── .github/workflows/      # CI: smoke + MCP + agent category tests on push
-├── server.py               # Main Central Gateway (FastAPI / Uvicorn + Swagger docs at /docs, auth via CTFKIT_API_TOKEN)
-├── mcp_server.py           # Headless MCP stdio server & Gateway Bridge (per-tool schemas)
-├── memory/                 # per-challenge persistent memory + _index.md + execution log + agent state
-├── testdata/               # synthetic demo assets (regenerated via tests/gen_testdata.py)
-├── writeups/<category>/    # step-by-step POCs with terminal commands
-├── wordlists/              # common passwords, directories, headers
-└── pyrightconfig.json      # Python IDE & language server configuration
-```
 
----
+## Design references
 
-## 📌 Technical Notes
+The architecture is informed by the Model Context Protocol tool contract and
+agent research including ReAct, Reflexion, and AgentBench. See
+[`docs/references.md`](docs/references.md) for the primary references and the
+recommended evaluation methodology.
 
-- `rsa_decrypt` automatically falls back through raw plaintext, PKCS1v15, and OAEP.
-- `aes_crypt` automatically attempts PKCS7 and unpadded decryption for ECB/CBC.
-- `stego_lsb` supports custom bit planes (LSB/MSB) and configurable bit extraction order (bytes-based, no numpy).
-- Standalone builds: `python scripts/build.py` → PyInstaller onefile `dist/ctfkit_api.exe` + `dist/ctfkit_mcp.exe`.
-- Source-level `:param` docs auto-fillable via `python scripts/add_param_docs.py --write`.
-- `pcap_http` contains a lightweight, zero-dependency parser for Ethernet/IPv4/TCP streams.
-- Synthetic demo test assets are located in `testdata/` (regenerated via `python tests/gen_testdata.py`).
-- **Decision Engine**: `POST /api/intelligence/{analyze-target,select-tools,optimize-parameters}` — category detection, keyword-ranked tool recommendation, and parameter contracts from the registry.
-- **Smart Cache**: LRU (256 entries) on all tool results — `GET /api/cache/stats` for hit/miss/eviction telemetry (side-effectful tools like `http_request`/`external_*` are never cached).
-- **Browser Agent**: `browser_agent` (Selenium 4.6+, headless Chrome auto-managed) for CTF web challenges — dump JS-rendered content, screenshots, form recon, security headers.
+## License
+
+CTF KIT is released under the [MIT License](LICENSE). Copyright © 2026 arseno25.

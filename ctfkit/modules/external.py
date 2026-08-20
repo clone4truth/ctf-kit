@@ -430,7 +430,7 @@ def _split_args(args: str) -> list[str]:
 def _docker_prefix() -> list[str] | None:
     """Run missing tools via a Kali container when Docker is available.
     Disable with CTFKIT_DOCKER=0; auto-pull with CTFKIT_DOCKER_PULL=1."""
-    if os.environ.get("CTFKIT_DOCKER", "1") == "0":
+    if os.environ.get("CTFKIT_DOCKER", "0") != "1":
         return None
     docker = shutil.which("docker")
     if not docker:
@@ -444,10 +444,17 @@ def _docker_prefix() -> list[str] | None:
         if os.environ.get("CTFKIT_DOCKER_PULL") != "1":
             return None
         subprocess.run([docker, "pull", img], capture_output=True, timeout=600)
-    return [docker, "run", "--rm", "-v", f"{os.getcwd()}:/work", "-w", "/work", img]
+    return [docker, "run", "--rm", "--network", "none", "-v", f"{os.getcwd()}:/work:ro", "-w", "/work", img]
 
 
 def _auto_install(name: str, timeout: int = _INSTALL_TIMEOUT) -> str:
+    from ..config import settings
+
+    if not settings.allow_install:
+        return ("AUTO-INSTALL BLOCKED by CTFKIT_ALLOW_INSTALL=0. "
+                "Remove that override or install the dependency manually.")
+    if os.environ.get("CTFKIT_SAFETY_MODE", "auto").lower() not in {"auto", "admin"}:
+        return "AUTO-INSTALL BLOCKED by the configured safety-policy override."
     cmd = INSTALL_CMD.get(name, {}).get(sys.platform)
     if not cmd and sys.platform.startswith("linux"):
         cmd = f"apt-get install -y {name}"
@@ -615,7 +622,7 @@ def _run_proc(name: str, label: str, key: str, proc, args: str, timeout: int, st
     out = "\n".join(out_lines)[-_MAX_OUT:]
     if proc.returncode != 0 and err_lines:
         err_tail = "\n".join(err_lines)[-1000:]
-        out += f"\n[stderr] {err_tail}"
+        out = f"ERROR: external command exited {proc.returncode}\n{out}\n[stderr] {err_tail}"
     return out.strip() or f"(exit {proc.returncode}, no output)"
 
 
@@ -626,7 +633,7 @@ def _wrapper(category: str, tool_name: str, args: str, timeout: int, auto: bool)
 
 
 @tool(category="osint")
-def external_recon(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_recon(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external recon/network tool: nmap, masscan, whatweb, dnsrecon, subfinder, amass, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto
@@ -637,7 +644,7 @@ def external_recon(tool: str, args: str = "", timeout: int = 120, auto: bool = T
 
 
 @tool(category="web")
-def external_web(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_web(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external web tool: nmap, gobuster, ffuf, sqlmap, nikto, wfuzz, dirsearch, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto
@@ -648,7 +655,7 @@ def external_web(tool: str, args: str = "", timeout: int = 120, auto: bool = Tru
 
 
 @tool(category="forensics")
-def external_forensics(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_forensics(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external forensics tool: binwalk, exiftool, foremost, tshark, volatility3, ... Auto-installs when missing.
     :param args: args
     :param auto: auto
@@ -659,7 +666,7 @@ def external_forensics(tool: str, args: str = "", timeout: int = 120, auto: bool
 
 
 @tool(category="stego")
-def external_stego(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_stego(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external stego tool: steghide, zsteg, outguess, stegseek, pngcheck, zbarimg, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto
@@ -670,7 +677,7 @@ def external_stego(tool: str, args: str = "", timeout: int = 120, auto: bool = T
 
 
 @tool(category="crypto")
-def external_crypto(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_crypto(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external crypto tool: hashcat, john, hashid, xortool, RsaCtfTool, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto
@@ -681,7 +688,7 @@ def external_crypto(tool: str, args: str = "", timeout: int = 120, auto: bool = 
 
 
 @tool(category="rev")
-def external_rev(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
+def external_rev(tool: str, args: str = "", timeout: int = 120, auto: bool = False) -> str:
     """Run an external rev tool: objdump, readelf, r2, gdb, ROPgadget, upx, checksec, ghidra_headless, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto

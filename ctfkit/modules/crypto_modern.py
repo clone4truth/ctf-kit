@@ -406,14 +406,14 @@ def rsa_common_modulus(n: int, e1: int, e2: int, c1: int, c2: int) -> str:
     g, a, b = ext_gcd(e1, e2)
     if g != 1:
         return f"Exponents are not coprime (gcd(e1,e2) = {g}). Cannot perform attack."
-    
+
     if a < 0:
         c1 = pow(c1, -1, n)
         a = -a
     if b < 0:
         c2 = pow(c2, -1, n)
         b = -b
-    
+
     m = (pow(c1, a, n) * pow(c2, b, n)) % n
     pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
     return (f"🏆 Common Modulus Attack Succeeded!\n"
@@ -431,13 +431,13 @@ def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
     """
     import math
     from functools import reduce
-    
+
     c_list = [int(x.strip(), 0) for x in ciphertexts_csv.split(",") if x.strip()]
     n_list = [int(x.strip(), 0) for x in moduli_csv.split(",") if x.strip()]
-    
+
     if len(c_list) < e or len(n_list) < e:
         return f"Need at least e={e} ciphertexts and moduli (provided {len(c_list)} ciphertexts, {len(n_list)} moduli)."
-    
+
     # CRT
     N = reduce(lambda a, b: a * b, n_list[:e])
     result = 0
@@ -445,7 +445,7 @@ def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
         m_i = N // n_i
         inv = pow(m_i, -1, n_i)
         result = (result + c_i * m_i * inv) % N
-    
+
     # Compute e-th root
     m = round(result ** (1 / e))
     while m ** e < result:
@@ -454,7 +454,7 @@ def rsa_hastad(ciphertexts_csv: str, moduli_csv: str, e: int = 3) -> str:
         m -= 1
     if m ** e != result:
         return f"e-th root not exact: m^e != CRT result. Check if message was padded or different per recipient."
-    
+
     pt = m.to_bytes((m.bit_length() + 7) // 8, "big")
     return (f"🏆 Hastad Broadcast Attack Succeeded!\n"
             f"m (int): {m}\n"
@@ -524,7 +524,7 @@ def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
     """
     c1 = from_hex(ct1_hex)
     crib_bytes = crib.encode("utf-8")
-    
+
     if not ct2_hex:
         # Single ciphertext crib drag: assume crib starts or exists at offset i
         results = [f"Dragging crib {crib!r} against single ciphertext ({len(c1)} bytes):"]
@@ -532,11 +532,11 @@ def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
             key_fragment = bytes(c1[i + j] ^ crib_bytes[j] for j in range(len(crib_bytes)))
             results.append(f"offset {i:3d}: key fragment (hex)={key_fragment.hex()} ({printable(key_fragment)})")
         return "\n".join(results[:50])
-    
+
     c2 = from_hex(ct2_hex)
     min_len = min(len(c1), len(c2))
     xored = bytes(c1[k] ^ c2[k] for k in range(min_len))
-    
+
     results = [
         f"C1 ⊕ C2 length: {min_len} bytes",
         f"Dragging crib {crib!r} across C1 ⊕ C2 (reveals other plaintext if crib is in C1 or C2):\n"
@@ -544,7 +544,7 @@ def xor_crib_drag(ct1_hex: str, ct2_hex: str = "", crib: str = "flag{") -> str:
     for i in range(min_len - len(crib_bytes) + 1):
         revealed = bytes(xored[i + j] ^ crib_bytes[j] for j in range(len(crib_bytes)))
         results.append(f"pos {i:3d}: {printable(revealed)}  (hex: {revealed.hex()})")
-    
+
     return "\n".join(results[:60])
 
 
@@ -556,11 +556,11 @@ def lcg_solve(states_csv: str, m: int = 0) -> str:
     """
     import math
     from functools import reduce
-    
+
     states = [int(x.strip(), 0) for x in states_csv.split(",") if x.strip()]
     if len(states) < 3:
         return "Need at least 3 consecutive states (e.g. '123, 456, 789')."
-    
+
     if not m:
         if len(states) < 6:
             return "Modulus m unknown: need at least 6 consecutive states to reliably deduce m via GCD."
@@ -569,21 +569,21 @@ def lcg_solve(states_csv: str, m: int = 0) -> str:
         m = abs(reduce(math.gcd, zeroes))
         if m <= 1:
             return "Could not automatically deduce modulus m. Please supply m."
-    
+
     x0, x1, x2 = states[0], states[1], states[2]
     try:
         a = ((x2 - x1) * pow(x1 - x0, -1, m)) % m
         c = (x1 - a * x0) % m
     except ValueError:
         return f"Failed to compute modular inverse with m={m}. (x1 - x0) and m are not coprime."
-    
+
     # Predict next 5 states
     curr = states[-1]
     predictions = []
     for _ in range(5):
         curr = (a * curr + c) % m
         predictions.append(str(curr))
-    
+
     return (f"🏆 LCG Parameters Recovered!\n"
             f"Multiplier (a) = {a}\n"
             f"Increment  (c) = {c}\n"
@@ -603,13 +603,13 @@ def hash_length_extension(original_data: str, append_data: str, original_hash: s
     """
     import struct
     alg = algorithm.lower().replace("-", "_")
-    
+
     def pad_md5(msg_len):
         pad = b"\x80"
         pad += b"\x00" * ((56 - (msg_len + 1) % 64) % 64)
         pad += struct.pack("<Q", msg_len * 8)
         return pad
-        
+
     def pad_sha1_256(msg_len):
         pad = b"\x80"
         pad += b"\x00" * ((56 - (msg_len + 1) % 64) % 64)
@@ -619,14 +619,14 @@ def hash_length_extension(original_data: str, append_data: str, original_hash: s
     orig_b = original_data.encode("latin-1")
     app_b = append_data.encode("latin-1")
     total_orig_len = key_length + len(orig_b)
-    
+
     if alg == "md5":
         glue_padding = pad_md5(total_orig_len)
     else:
         glue_padding = pad_sha1_256(total_orig_len)
-    
+
     forged_data = orig_b + glue_padding + app_b
-    
+
     return (f"Hash Length Extension for {alg.upper()}:\n"
             f"Key length assumed : {key_length} bytes\n"
             f"Original Data      : {original_data!r}\n"
@@ -1046,4 +1046,231 @@ def pohlig_hellman(g: int, h: int, p: int) -> str:
         f"x = {x}",
         f"verify g^x = h: {check == h}",
     ]
+    return "\n".join(lines)
+
+
+@tool(category="crypto")
+def xor_known_plaintext(ciphertext_hex: str, known_plaintext: str = "flag{", max_key_len: int = 32) -> str:
+    """Recover repeating XOR key and decrypt ciphertext using known plaintext prefix (e.g. 'flag{', PNG header, XML).
+
+    :param ciphertext_hex: The hex-encoded ciphertext
+    :param known_plaintext: Known plaintext prefix at offset 0
+    :param max_key_len: Maximum key length to test (default 32)
+    """
+    clean_hex = ciphertext_hex.strip().replace("0x", "").replace(" ", "").replace("\n", "")
+    try:
+        ct = bytes.fromhex(clean_hex)
+    except ValueError:
+        return "ERROR: Invalid hex in ciphertext_hex."
+
+    known_bytes = known_plaintext.encode("utf-8")
+    if len(known_bytes) > len(ct):
+        return "ERROR: known_plaintext is longer than ciphertext."
+
+    recovered_prefix = bytes(c ^ k for c, k in zip(ct[:len(known_bytes)], known_bytes))
+
+    results = [
+        f"Ciphertext Length : {len(ct)} bytes",
+        f"Known Prefix      : {known_plaintext!r} ({len(known_bytes)} bytes)",
+        f"Recovered Key Part: {recovered_prefix!r} (hex: {recovered_prefix.hex()})\n"
+    ]
+
+    # Try possible key lengths <= len(known_bytes)
+    found_any = False
+    for klen in range(1, min(len(known_bytes), max_key_len) + 1):
+        key = recovered_prefix[:klen]
+        # Check if the recovered prefix repeats cleanly with period klen
+        consistent = True
+        for i in range(len(known_bytes)):
+            if recovered_prefix[i] != key[i % klen]:
+                consistent = False
+                break
+        if consistent:
+            dec = bytes(c ^ key[i % klen] for i, c in enumerate(ct))
+            pr_ratio = sum(1 for b in dec if 32 <= b <= 126 or b in (10, 13, 9)) / len(dec)
+            results.append(
+                f"Candidate Key (len={klen}): {key!r} (hex: {key.hex()})\n"
+                f"Printable Ratio : {pr_ratio*100:.1f}%\n"
+                f"Decrypted Preview:\n{dec[:300].decode('latin-1', errors='replace')}\n"
+            )
+            found_any = True
+
+    if not found_any:
+        results.append("No short periodic key fully contained within known prefix. Recovered key prefix shown above.")
+
+    return "\n".join(results)
+
+
+@tool(category="crypto")
+def discrete_log_bsgs(g: int, h: int, p: int, max_steps: int = 1000000) -> str:
+    """Solve discrete logarithm g^x = h mod p using Baby-step Giant-step algorithm (O(sqrt(p)) complexity).
+
+    :param g: Base / generator
+    :param h: Target value
+    :param p: Modulus
+    :param max_steps: Maximum baby steps table limit (default 1,000,000)
+    """
+    import math
+    if p <= 2:
+        return "ERROR: Modulus p must be > 2."
+
+    # m = ceil(sqrt(p))
+    m = int(math.isqrt(p)) + 1
+    if m > max_steps:
+        m = max_steps
+
+    # 1. Baby steps: compute g^j mod p for j in 0..m-1 and store in hash table
+    tbl = {}
+    cur = 1
+    for j in range(m):
+        if cur not in tbl:
+            tbl[cur] = j
+        cur = (cur * g) % p
+
+    # 2. Giant steps: compute h * (g^(-m))^i mod p for i in 0..m-1
+    # g_inv_m = (g^m)^(-1) mod p
+    g_m = pow(g, m, p)
+    try:
+        g_inv_m = pow(g_m, -1, p)
+    except ValueError:
+        return "ERROR: Base g is not coprime to modulus p."
+
+    gamma = h % p
+    for i in range(m):
+        if gamma in tbl:
+            j = tbl[gamma]
+            x = i * m + j
+            # Verify
+            if pow(g, x, p) == h % p:
+                return (
+                    f"Discrete Logarithm Solved:\n"
+                    f"  x = {x}\n"
+                    f"  Verify: {g}^{x} mod {p} == {pow(g, x, p)} (Target: {h % p})"
+                )
+        gamma = (gamma * g_inv_m) % p
+
+    return f"No discrete log solution found within search bound m={m}."
+
+
+@tool(category="crypto")
+def linux_ssh_key_inspect(key_data_or_path: str) -> str:
+    """Inspect OpenSSH public or private keys, extracting key type, bit length, fingerprint, and comment.
+
+    :param key_data_or_path: Path to key file (e.g. id_rsa.pub) or raw key string
+    """
+    import base64
+    import hashlib
+    import os
+
+    if os.path.exists(key_data_or_path):
+        content = open(key_data_or_path, "r", errors="ignore").read().strip()
+    else:
+        content = key_data_or_path.strip()
+
+    lines = [f"OpenSSH Key Inspection:"]
+
+    # 1. Public key format: <type> <b64_blob> <comment>
+    parts = content.split()
+    if len(parts) >= 2 and any(parts[0].startswith(p) for p in ("ssh-", "ecdsa-")):
+        k_type = parts[0]
+        b64_blob = parts[1]
+        pad = len(b64_blob) % 4
+        if pad:
+            b64_blob += "=" * (4 - pad)
+        comment = " ".join(parts[2:]) if len(parts) > 2 else "None"
+        try:
+            raw = base64.b64decode(b64_blob)
+            fp_sha256 = base64.b64encode(hashlib.sha256(raw).digest()).decode().rstrip("=")
+            fp_md5 = ":".join(f"{b:02x}" for b in hashlib.md5(raw).digest())
+            lines.extend([
+                f"  Key Type    : {k_type}",
+                f"  Comment     : {comment}",
+                f"  Blob Size   : {len(raw)} bytes",
+                f"  SHA256 Fingerprint: SHA256:{fp_sha256}",
+                f"  MD5 Fingerprint   : MD5:{fp_md5}",
+            ])
+            return "\n".join(lines)
+        except Exception as ex:
+            lines.append(f"  Error parsing base64 blob: {ex}")
+
+    # 2. Private key header check
+    if "-----BEGIN OPENSSH PRIVATE KEY-----" in content:
+        lines.extend([
+            f"  Format      : OpenSSH Private Key (Ed25519 or modern RSA)",
+            f"  Encrypted   : {'Yes (AES/bcrypt)' if 'bcrypt' in content else 'No (Plaintext PEM)'}",
+            f"  Size        : {len(content)} characters"
+        ])
+    elif "-----BEGIN RSA PRIVATE KEY-----" in content:
+        lines.extend([
+            f"  Format      : Legacy OpenSSL RSA Private Key (PEM PKCS#1)",
+            f"  Encrypted   : {'Yes' if 'Proc-Type: 4,ENCRYPTED' in content else 'No (Plaintext PEM)'}",
+        ])
+    else:
+        lines.append(f"  Unrecognized key header: {content[:80]}...")
+
+    return "\n".join(lines)
+
+
+@tool(category="crypto")
+def linux_gpg_key_inspect(key_data_or_path: str) -> str:
+    """Inspect OpenPGP / GPG ASCII-armored key blocks, extracting packet tags, key ID, and creation metadata.
+
+    :param key_data_or_path: Path to GPG key file or raw PGP ASCII armor string
+    """
+    import base64
+    import os
+    import time
+
+    if os.path.exists(key_data_or_path):
+        content = open(key_data_or_path, "r", errors="ignore").read().strip()
+    else:
+        content = key_data_or_path.strip()
+
+    if "BEGIN PGP" not in content:
+        return "ERROR: String does not contain '-----BEGIN PGP...' ASCII armor header."
+
+    lines = ["OpenPGP / GPG Key Block Analysis:"]
+
+    # Extract body between armor headers
+    in_body = False
+    body_b64 = []
+    for line in content.splitlines():
+        if line.startswith("-----BEGIN PGP"):
+            in_body = True
+            lines.append(f"  Header: {line}")
+            continue
+        if line.startswith("-----END PGP"):
+            in_body = False
+            break
+        if in_body:
+            if ":" in line and not body_b64:  # Header metadata like Version: ...
+                lines.append(f"  Meta  : {line}")
+                continue
+            if line.startswith("="):  # CRC24 checksum line
+                lines.append(f"  CRC24 : {line}")
+                continue
+            body_b64.append(line.strip())
+
+    try:
+        raw = base64.b64decode("".join(body_b64))
+        lines.append(f"  Raw Payload Size: {len(raw)} bytes")
+
+        # Check PGP packet tag in first byte (Old format: 10xxxxxx, New format: 11xxxxxx)
+        first_b = raw[0]
+        if first_b & 0x80:
+            is_new = bool(first_b & 0x40)
+            tag = (first_b & 0x3F) if is_new else ((first_b >> 2) & 0x0F)
+            PGP_TAGS = {
+                1: "Public-Key Encrypted Session Key",
+                2: "Signature Packet",
+                6: "Public-Key Packet",
+                5: "Secret-Key Packet",
+                14: "Public-Subkey Packet",
+                13: "User ID Packet",
+            }
+            tag_name = PGP_TAGS.get(tag, f"Tag_{tag}")
+            lines.append(f"  First Packet Type: {tag_name} ({'New' if is_new else 'Old'} format)")
+    except Exception as ex:
+        lines.append(f"  Payload decoding error: {ex}")
+
     return "\n".join(lines)

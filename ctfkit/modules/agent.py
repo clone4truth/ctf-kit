@@ -7,14 +7,16 @@ Project-scoped state: agent can load/save state per-project (challenge directory
 """
 
 import json
+import hashlib
 import re
 import time
+import os
 from pathlib import Path
 from typing import Any
 
 from ..flagmeta import extract_flags, detect_flag
 from ..logging import log
-from ..registry import tool, TOOLS, run_tool
+from ..registry import tool, TOOLS, execute_tool
 from .analyze import detect_challenge, recall_knowledge, select_tools, optimize_parameters
 from .external import ALLOWED as EXTERNAL_TOOLS, DEFAULT_ARGS as EXTERNAL_ARGS, _NO_TEMPLATE
 
@@ -23,6 +25,20 @@ NEW_TOOL_COUNTER_FILE = Path(__file__).resolve().parent.parent / "memory" / "new
 
 # Project-scoped agent state directory
 PROJECT_AGENT_DIR = Path(__file__).resolve().parent.parent / "memory" / "projects"
+RUN_WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "memory" / "runs"
+
+
+def _redact_args(args: dict) -> dict:
+    sensitive = {"password", "token", "secret", "api_key", "authorization", "cookie", "key"}
+    return {k: ("[redacted]" if k.lower() in sensitive else v) for k, v in args.items()}
+
+
+def _save_run_manifest(run_id: str, manifest: dict) -> Path:
+    workspace = RUN_WORKSPACE_DIR / run_id
+    workspace.mkdir(parents=True, exist_ok=True)
+    path = workspace / "manifest.json"
+    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
 def _load_new_tool_counter() -> int:
@@ -74,6 +90,8 @@ def scaffold_new_tool(name_hint: str, category: str, summary: str, params: str =
             continue
         parts = spec.split(":")
         pname = parts[0].strip()
+        if not _re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,39}", pname):
+            return f"ERROR: invalid parameter name: {pname!r}"
         ptype = parts[1].strip() if len(parts) > 1 else "str"
         if ptype == "int":
             sig_parts.append(f"{pname}: int = 0")
@@ -84,7 +102,8 @@ def scaffold_new_tool(name_hint: str, category: str, summary: str, params: str =
             sig_parts.append(f"{pname}: str = ''")
             body_parts.append(f"    {pname} = str({pname})")
 
-    src = f'''"""{summary}."""\n\nfrom ..registry import tool\n\n\n@tool(category={category!r})\ndef {unique_name}({", ".join(sig_parts)}) -> str:\n    """{summary}."""\n'''
+    safe_summary = summary.replace("\r", " ").replace("\n", " ")[:240]
+    src = f'{safe_summary!r}\n\nfrom ..registry import tool\n\n\n@tool(category={category!r})\ndef {unique_name}({", ".join(sig_parts)}) -> str:\n    """Generated tool stub; implementation requires review."""\n'
     if body_parts:
         src += "\n".join(body_parts) + "\n"
     joined = ", ".join(sig_parts)
@@ -121,10 +140,11 @@ class AgentState:
     """
 
     def __init__(self, project_id: str = ""):
-        self.project_id = project_id
+        safe_project_id = re.sub(r"[^A-Za-z0-9_.-]", "_", project_id).replace("..", "_").strip(".")[:80] or "project"
+        self.project_id = safe_project_id
         if project_id:
             PROJECT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
-            self.state_path = PROJECT_AGENT_DIR / f"{project_id}.json"
+            self.state_path = PROJECT_AGENT_DIR / f"{safe_project_id}.json"
         else:
             self.state_path = AGENT_STATE_FILE
         self.state = self._load()
@@ -218,6 +238,102 @@ class AgentState:
         self.save()
 
 
+class ContextStore:
+    """Dynamic execution blackboard that captures intermediate outputs and pipes them to subsequent tools."""
+
+    def __init__(self, problem_statement: str):
+        import re
+        self.problem = problem_statement
+        self.urls: list[str] = re.findall(r"https?://[^\s\"'<>)\]]+", problem_statement)
+        from urllib.parse import urlsplit
+        self.allowed_hosts = {urlsplit(u).hostname for u in self.urls if urlsplit(u).hostname}
+        self.files: list[str] = re.findall(
+            r"[\w./\\:\-]+\.(?:png|jpe?g|gif|bmp|webp|tif|ico|wav|mp3|flac|ogg|pcap|pcapng|zip|7z|rar|gz|pyc|elf|exe|dll|bin|pdf|txt|pem|key|sqlite|db|json|php|py|html)",
+            problem_statement,
+            re.IGNORECASE
+        )
+        self.tokens: list[str] = []
+        self.cookies: dict[str, str] = {}
+        self.endpoints: list[str] = []
+        self.hashes: list[str] = []
+        self.decompiled_symbols: list[str] = []
+        self.leaked_addresses: list[str] = []
+        self.last_response_text: str = ""
+
+    def ingest_output(self, tool_name: str, output: str):
+        """Harvest tokens, URLs, hashes, cookies from tool execution results."""
+        import re
+        if not output or output.startswith("ERROR"):
+            return
+        self.last_response_text = output
+
+        # Harvest URLs
+        from urllib.parse import urlsplit
+        new_urls = [u for u in re.findall(r"https?://[^\s\"'<>)\]]+", output)
+                    if urlsplit(u).hostname in self.allowed_hosts]
+        for u in new_urls:
+            if u not in self.urls:
+                self.urls.append(u)
+
+        # Harvest JWT tokens
+        jwt_matches = re.findall(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*\b", output)
+        for j in jwt_matches:
+            if j not in self.tokens:
+                self.tokens.append(j)
+
+        # Harvest Hashes
+        hex_hashes = re.findall(r"\b[0-9a-fA-F]{32}\b|\b[0-9a-fA-F]{40}\b|\b[0-9a-fA-F]{64}\b", output)
+        for h in hex_hashes:
+            if h not in self.hashes:
+                self.hashes.append(h)
+
+        # Harvest Leaked hex addresses
+        leaks = re.findall(r"\b0x7f[0-9a-fA-F]{10}\b|\b0x[0-9a-fA-F]{8,16}\b", output)
+        for lk in leaks:
+            if lk not in self.leaked_addresses:
+                self.leaked_addresses.append(lk)
+
+        # Harvest Set-Cookie
+        cookie_matches = re.findall(r"Set-Cookie:\s*([^=;\s]+)=([^;\r\n]+)", output, re.IGNORECASE)
+        if self.allowed_hosts:
+            for k, v in cookie_matches:
+                self.cookies[k] = v
+
+    def resolve_args(self, tool_name: str, args: dict) -> dict:
+        """Inject real dynamic values into args replacing default placeholders."""
+        resolved = dict(args)
+
+        # URL replacement
+        if "url" in resolved and (resolved["url"] == "http://example.com" or not resolved["url"]):
+            if self.urls:
+                resolved["url"] = self.urls[0]
+
+        # Token replacement
+        if "token" in resolved and (not resolved["token"] or "eyJhbGci" in resolved["token"]):
+            if self.tokens:
+                resolved["token"] = self.tokens[0]
+
+        # File / Path replacement
+        for p_key in ("path", "file_path", "image_path", "pcap_path", "binary_path"):
+            if p_key in resolved and (not resolved[p_key] or "testdata" in resolved[p_key]):
+                if self.files:
+                    resolved[p_key] = self.files[0]
+
+        # Cookie header injection for http_request
+        if tool_name == "http_request" and self.cookies:
+            cookie_hdr = "Cookie: " + "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+            cur_hdrs = resolved.get("headers_csv", "")
+            if "Cookie:" not in cur_hdrs:
+                resolved["headers_csv"] = f"{cur_hdrs}\n{cookie_hdr}".strip()
+
+        # Leak address replacement for libc_database_lookup
+        if tool_name == "libc_database_lookup" and self.leaked_addresses:
+            if "leak_address_hex" in resolved and not resolved["leak_address_hex"]:
+                resolved["leak_address_hex"] = self.leaked_addresses[0]
+
+        return resolved
+
+
 def _extract_knowledge(query: str, limit: int = 3) -> str:
     """Retrieve relevant knowledge from memory and installed skills (context7-style)."""
     try:
@@ -258,7 +374,7 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
 
     def _pick(pattern: str, *sources: str) -> list[str]:
         for src in sources:
-            m = re.findall(pattern, src.lower())
+            m = re.findall(pattern, src, flags=re.IGNORECASE)
             if m:
                 return m
         return []
@@ -288,6 +404,10 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
         problem_statement, context, knowledge,
     )
     urls = _pick(r"https?://[^\s\"'<>)\]]+", problem_statement, context, knowledge)
+    jwt_tokens = _pick(
+        r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*\b",
+        problem_statement, context, knowledge,
+    )
 
     for param in param_names:
         if param == "max_iter":  # control knob, not challenge data — keep tool default
@@ -357,21 +477,21 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
         elif param in ("key_length", "rails", "offset", "length", "max_bytes", "block_size", "timeout", "max_body", "min_len", "max_flows"):
             if labeled.get(param):
                 args[param] = labeled[param]
-            elif numbers:
-                args[param] = numbers[0]
             elif param == "key_length":
                 args[param] = "1"
             elif param == "rails":
                 args[param] = "3"
             elif param == "timeout":
                 args[param] = "10"
+            elif param in ("max_bytes", "block_size", "max_body"):
+                args[param] = "2048"
+            elif param in ("min_len", "max_flows"):
+                args[param] = "5"
             else:
                 args[param] = "64"
         elif param in ("shift", "a", "b", "d", "e1", "e2", "c1", "c2", "target_addr", "write_val", "arch"):
             if labeled.get(param):
                 args[param] = labeled[param]
-            elif numbers:
-                args[param] = numbers[0]
             elif param == "shift":
                 args[param] = "3"
             elif param == "arch":
@@ -382,7 +502,8 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
             if param == "secret" and "none" in text:
                 args[param] = ""
             elif param == "token":
-                args[param] = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJmbGFnIjoiZmxhZ3tqd3R9"
+                args[param] = (jwt_tokens[0] if jwt_tokens else
+                               "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4ifQ.")
             elif param == "rsa_public_key_pem":
                 args[param] = "test_public_key_bytes"
             elif param in ("header_json", "payload_json"):
@@ -390,7 +511,11 @@ def _infer_args(tool_name: str, context: str, problem_statement: str, knowledge:
             else:
                 args[param] = "LEMON"
         elif param in ("text", "data", "input", "payload"):
-            if "base64" in text:
+            # Prefer an actual encoded blob even when the challenge deliberately
+            # omits the encoding name. Blind identification is part of solving.
+            if b64_blobs and tool_name in {"decode_all", "decode_chain", "decode_cascade", "decode_base"}:
+                args[param] = b64_blobs[0]
+            elif "base64" in text:
                 args[param] = b64_blobs[0] if b64_blobs else "aGVsbG8gY3RmIQ=="
             elif "morse" in text or "..." in text:
                 args[param] = ".... . .-.. .-.. ---"
@@ -709,7 +834,7 @@ def _external_steps(
         steps.append({
             "tool": wrapper,
             "key": key,
-            "args": {"tool": tool_name, "args": args, "timeout": "60", "auto": True},
+            "args": {"tool": tool_name, "args": args, "timeout": "60", "auto": False},
             "reason": f"external: {tool_name} {args}",
             "source": "external",
         })
@@ -888,14 +1013,20 @@ def _llm_pick(problem_statement: str, category: str, tried: list[str], last_outp
     endpoint = _os.environ.get("CTFKIT_LLM_ENDPOINT", "")
     if not endpoint:
         return None
+    from urllib.parse import urlsplit
+    endpoint_url = urlsplit(endpoint)
+    if endpoint_url.scheme != "https" and endpoint_url.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        log.warning("LLM steering disabled: endpoint must use HTTPS or loopback")
+        return None
     avail = sorted(
         n for n, m in TOOLS.items()
         if m["category"] == category and n not in tried and not n.startswith("external_") and n not in _UNINFERABLE)
     if not avail:
         return None
+    shared_output = last_output[:600] if _os.environ.get("CTFKIT_LLM_SHARE_OUTPUT") == "1" else "[not shared]"
     prompt = (f"CTF challenge: {problem_statement[:500]}\n"
               f"Category: {category}. Tools already tried: {', '.join(sorted(tried)[-15:])}\n"
-              f"Last tool outputs: {last_output[:600]}\n"
+              f"Last tool outputs: {shared_output}\n"
               f"Choose exactly one tool name from: {', '.join(avail)}. Reply with the name only.")
     body = _json.dumps({
         "model": _os.environ.get("CTFKIT_LLM_MODEL", "default"),
@@ -929,11 +1060,22 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
     :param project_id: project/challenge ID for scope isolation (default: global state)
     """
 
-    state = AgentState(project_id)
+    problem_hash = hashlib.sha256(problem_statement.encode("utf-8", errors="replace")).hexdigest()
+    effective_project_id = project_id or f"challenge-{problem_hash[:16]}"
+    state = AgentState(effective_project_id)
     state.increment_total_runs()
     start_time = time.time()
 
-    challenge_id = f"{problem_statement[:60].lower().replace(' ', '-')}"
+    challenge_id = problem_hash[:24]
+    run_manifest = {
+        "schema_version": 1,
+        "challenge_id": challenge_id,
+        "project_id": effective_project_id,
+        "problem_sha256": problem_hash,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "attempts": [],
+        "solved": False,
+    }
     excluded_tools: list[str] = []
     if challenge_id in state.state["challenge_experience"]:
         exp = state.state["challenge_experience"][challenge_id]
@@ -952,6 +1094,7 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
             return "\n".join(report)
 
     current_iteration = 0
+    context_store = ContextStore(problem_statement)
 
     report = [
         "==================================================",
@@ -962,18 +1105,17 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
         "",
     ]
 
-    plan_output = detect_challenge(problem_statement)
-    report.append("📋 PLAN:")
+    # 1. Plan & Target Profiling
+    from .plan_engine import plan_challenge, analyze_target_profile, generate_hypotheses
+    plan_output = plan_challenge(problem_statement)
+    report.append("📋 STRUCTURED PLAN & HYPOTHESES:")
     report.append(plan_output)
     report.append("")
 
-    category = "misc"
-    platform = "unknown"
-    for line in plan_output.splitlines():
-        if line.startswith("CATEGORY:"):
-            category = line.split(":", 1)[1].strip()
-        elif line.startswith("PLATFORM:"):
-            platform = line.split(":", 1)[1].strip()
+    target_profile = analyze_target_profile(problem_statement)
+    category = target_profile.category or "misc"
+    platform = target_profile.platform or "unknown"
+    hypotheses = generate_hypotheses(target_profile)
 
     knowledge = _extract_knowledge(problem_statement, limit=3)
     report.append("🧠 RECALLED KNOWLEDGE:")
@@ -981,10 +1123,10 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
     report.append("")
 
     understanding = _understand_problem(problem_statement, knowledge)
-    report.append("🧠 PEMAHAMAN SOAL:")
+    report.append("🧠 PROBLEM COMPREHENSION:")
     report.append(f"  {understanding['summary']}")
     if understanding["hints"]:
-        report.append("  Teknik terdeteksi: " + ", ".join(
+        report.append("  Detected Techniques: " + ", ".join(
             f"{fam} (x{hits})" for fam, hits in understanding["hints"][:5]))
     report.append("")
 
@@ -1012,6 +1154,22 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
         exclude=sorted(tried_tools), extra_context=last_output,
         hints=understanding["hints"],
     )
+    # Make the hypothesis engine operational: prioritize its bounded, highest-confidence branch.
+    if hypotheses:
+        primary = max(hypotheses, key=lambda h: h.confidence)
+        existing = {step["tool"] for step in strategy}
+        hypothesis_steps = []
+        for tool_name in primary.recommended_tools[:primary.budget]:
+            if tool_name in TOOLS and tool_name not in existing:
+                hypothesis_steps.append({
+                    "tool": tool_name, "key": tool_name,
+                    "args": _infer_args(tool_name, plan_output, problem_statement, knowledge),
+                    "reason": primary.rationale, "source": primary.id,
+                })
+        rank = {name: i for i, name in enumerate(primary.recommended_tools)}
+        strategy.sort(key=lambda step: rank.get(step["tool"], len(rank)))
+        strategy = hypothesis_steps + strategy
+        report.append(f"🔬 ACTIVE HYPOTHESIS: {primary.title} (confidence {primary.confidence:.0%}, budget {primary.budget})")
     if not strategy:
         report.append("❌ No viable strategy found. Try a different challenge description.")
         return "\n".join(report)
@@ -1061,19 +1219,7 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
             discovery = discover_techniques(problem_statement, category)
             report.append(discovery[:1500])
             report.append("")
-            if iteration + 1 < max_iterations:
-                try:
-                    hint = f"agent_{category}_variant_{iteration + 1}"
-                    scaffold_result = scaffold_new_tool(
-                        name_hint=hint,
-                        category=category,
-                        summary=f"Auto-scaffolded tool for {category} challenge variant discovered by agent",
-                        params="data:str",
-                    )
-                    report.append(f"🛠️ BREAKTHROUGH: {scaffold_result}")
-                    state.learn_new_strategy(f"{category}:scaffolded_new_tool_{hint}")
-                except Exception as ex:
-                    report.append(f"   Discovery/breakthrough failed: {ex}")
+            report.append("Tool creation is proposal-only; autonomous source mutation is disabled.")
             strategy = _build_strategy(
                 plan_output, knowledge, state, category, problem_statement,
                 exclude=sorted(tried_tools), extra_context=last_output,
@@ -1088,6 +1234,7 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
                 break
 
         ran_any = False
+        consecutive_failures = 0
         for step in strategy:
             tool_name = step["tool"]
             step_key = step.get("key", tool_name)
@@ -1096,12 +1243,31 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
             tried_tools.add(step_key)
             ran_any = True
 
+            # Resolve dynamic arguments from ContextStore
+            raw_args = step.get("args") or _infer_args(tool_name, plan_output, problem_statement, knowledge)
+            resolved_args = context_store.resolve_args(tool_name, raw_args)
+
             report.append(f"🔧 Trying: {tool_name} (reason: {step['reason']})")
             try:
-                result = run_tool(tool_name, step["args"])
-                success = not result.startswith("ERROR")
-                if tool_name in _EXTERNAL_WRAPPERS:
-                    success = success and not any(m in result for m in _EXTERNAL_FAIL_MARKERS)
+                attempt_started = time.perf_counter()
+                execution = execute_tool(tool_name, resolved_args)
+                result = execution["text"]
+                success = execution["status"] == "success"
+                run_manifest["attempts"].append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "source": step.get("source", "unknown"),
+                    "hypothesis": step.get("reason", "")[:300],
+                    "args": _redact_args(resolved_args),
+                    "status": execution["status"],
+                    "duration_ms": round((time.perf_counter() - attempt_started) * 1000, 2),
+                    "output_sha256": hashlib.sha256(result.encode("utf-8", errors="replace")).hexdigest(),
+                    "flag_candidates": [item["value"] for item in execution.get("flags", [])],
+                })
+
+                # Ingest output into ContextStore
+                context_store.ingest_output(tool_name, result)
+
                 state.record_tool_run(
                     tool_name,
                     success=success,
@@ -1110,8 +1276,9 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
                 )
 
                 if success:
+                    consecutive_failures = 0
                     report.append(f"✅ {tool_name} succeeded ({len(result)} chars)")
-                    flags = extract_flags(result)
+                    flags = [item["value"] for item in execution.get("flags", [])] or extract_flags(result)
                     if flags:
                         flag_found = True
                         flag_text = flags[0]
@@ -1125,12 +1292,18 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
                     last_output = result
                     report.append(f"   Output preview: {result[:200]}")
                 else:
+                    consecutive_failures += 1
                     report.append(f"❌ {tool_name} failed: {result[:200]}")
                     failed_keys.add(step_key)
                     state.learn_new_strategy(
                         f"{category}:avoid_{tool_name}_for_{step['reason'][:50]}"
                     )
                     last_output = f"{last_output}\n{result[:200]}"
+
+                    # Circuit Breaker: If 2 consecutive failures occur in this technique branch, pivot immediately!
+                    if consecutive_failures >= 2:
+                        report.append("⚠️ CIRCUIT BREAKER TRIGGERED: Consecutive technique failures detected. Pruning branch & pivoting...")
+                        break
 
             except Exception as ex:
                 report.append(f"❌ {tool_name} exception: {ex}")
@@ -1142,6 +1315,13 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
                     context=step["reason"],
                 )
                 last_output = f"{last_output}\n{ex}"
+                run_manifest["attempts"].append({
+                    "iteration": iteration + 1, "tool": tool_name,
+                    "source": step.get("source", "unknown"),
+                    "hypothesis": step.get("reason", "")[:300],
+                    "args": _redact_args(resolved_args), "status": "error",
+                    "error": str(ex)[:500],
+                })
 
             if flag_found:
                 break
@@ -1166,6 +1346,14 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
             report.append("")
 
     elapsed = time.time() - start_time
+    run_manifest.update({
+        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "elapsed_seconds": round(elapsed, 3),
+        "solved": flag_found,
+        "flag_sha256": hashlib.sha256(flag_text.encode()).hexdigest() if flag_text else "",
+        "successful_tool": success_tool,
+    })
+    manifest_path = _save_run_manifest(challenge_id, run_manifest)
     state.update_challenge_experience(challenge_id, {
         "iteration": iterations_used,
         "excluded_tools": sorted(failed_keys),
@@ -1183,6 +1371,7 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
     report.append(f"Iterations used: {iterations_used}")
     report.append(f"Tools tried (never repeated): {len(tried_tools)}")
     report.append(f"Time elapsed: {elapsed:.2f}s")
+    report.append(f"Evidence manifest: {manifest_path}")
     report.append(f"Total agent runs (session): {state.state['total_runs']}")
     report.append(f"Tool runs successful: {state.state['successful_runs']}/{state.state['successful_runs'] + state.state['failed_runs']}")
     if flag_text:
@@ -1199,6 +1388,13 @@ def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id
                 note=final_note,
                 platform=platform,
                 status="solved",
+                problem=problem_statement,
+                commands="\n".join(
+                    f"ctf-tools {a['tool']} {json.dumps(a.get('args', {}), ensure_ascii=False)}"
+                    for a in run_manifest["attempts"]
+                ),
+                evidence=last_output or f"{success_tool} recovered {flag_text}",
+                source="autonomous",
             )
         except Exception as ex:
             log.warning("Memory save failed: %s", ex)
@@ -1258,7 +1454,8 @@ def reset_agent_memory(project_id: str = "") -> str:
     :param project_id: project ID to reset (default: global agent memory)
     """
     if project_id:
-        proj_file = PROJECT_AGENT_DIR / f"{project_id}.json"
+        safe_project_id = re.sub(r"[^A-Za-z0-9_.-]", "_", project_id).replace("..", "_").strip(".")[:80] or "project"
+        proj_file = PROJECT_AGENT_DIR / f"{safe_project_id}.json"
         if proj_file.exists():
             proj_file.unlink()
             return f"Agent memory for project '{project_id}' reset complete."

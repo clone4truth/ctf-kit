@@ -1,0 +1,171 @@
+{
+  "schema_version": 2,
+  "quality_score_10": 10.0,
+  "direct": {
+    "passed": 10,
+    "total": 10
+  },
+  "agent": {
+    "passed": 6,
+    "total": 6
+  },
+  "category_coverage": {
+    "covered": [
+      "crypto",
+      "encoding",
+      "forensics",
+      "misc",
+      "osint",
+      "pwn",
+      "rev",
+      "stego",
+      "web"
+    ],
+    "total": 9,
+    "rate": 1.0
+  },
+  "flag_false_positives": 0,
+  "elapsed_seconds": 0.506,
+  "cases": [
+    {
+      "id": "encoding-base64-001",
+      "category": "encoding",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "picoCTF{eval_fixture}"
+      ]
+    },
+    {
+      "id": "crypto-xor-001",
+      "category": "crypto",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{xor_eval}"
+      ]
+    },
+    {
+      "id": "stego-lsb-001",
+      "category": "stego",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{lsb_hidden}"
+      ]
+    },
+    {
+      "id": "forensics-pcap-http-001",
+      "category": "forensics",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{http_extracted}"
+      ]
+    },
+    {
+      "id": "web-jwt-001",
+      "category": "web",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{jwt}"
+      ]
+    },
+    {
+      "id": "rev-pyc-001",
+      "category": "rev",
+      "passed": true,
+      "status": "success",
+      "flags": []
+    },
+    {
+      "id": "pwn-debruijn-001",
+      "category": "pwn",
+      "passed": true,
+      "status": "success",
+      "flags": []
+    },
+    {
+      "id": "osint-geohash-001",
+      "category": "osint",
+      "passed": true,
+      "status": "success",
+      "flags": []
+    },
+    {
+      "id": "misc-flag-001",
+      "category": "misc",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{misc_eval}"
+      ]
+    },
+    {
+      "id": "encoding-layered-002",
+      "category": "encoding",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{layered_blind}"
+      ]
+    }
+  ],
+  "agent_cases": [
+    {
+      "id": "agent-crypto-base64",
+      "category": "crypto",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "picoCTF{eval_fixture}"
+      ]
+    },
+    {
+      "id": "agent-web-jwt",
+      "category": "web",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{jwt}"
+      ]
+    },
+    {
+      "id": "agent-stego-lsb",
+      "category": "stego",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{lsb_hidden}"
+      ]
+    },
+    {
+      "id": "agent-forensics-pcap",
+      "category": "forensics",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{http_extracted}"
+      ]
+    },
+    {
+      "id": "agent-blind-encoding",
+      "category": "encoding",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "picoCTF{eval_fixture}"
+      ]
+    },
+    {
+      "id": "agent-blind-image",
+      "category": "stego",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{lsb_hidden}"
+      ]
+    }
+  ]
+}

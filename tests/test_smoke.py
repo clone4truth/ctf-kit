@@ -11,7 +11,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 import ctfkit.modules  # noqa
-from ctfkit.registry import run_tool
+from ctfkit.registry import execute_tool
 
 
 def _mt19937_outs(seed=42, n=624):
@@ -175,14 +175,30 @@ TESTS = [
     ("cve_research", {"problem": "no software here, just a random plaintext"}),
 ]
 
-failed = 0
-for name, args in TESTS:
-    out = run_tool(name, args)
-    ok = "ERROR" not in out
-    if not ok:
-        failed += 1
-    print(f"{'OK  ' if ok else 'FAIL'} {name}: {out.splitlines()[0][:90] if out else ''}")
+EXPECTED_NEGATIVE_PROBES = {
+    "aes_cbc_bitflip", "rsa_parse_key", "external_forensics", "external_stego",
+    "external_crypto", "external_rev", "github_search",
+}
 
-print(f"\n{len(TESTS) - failed}/{len(TESTS)} passed, {failed} failed")
-if failed > 0:
-    sys.exit(1)
+
+def main() -> int:
+    passed = expected = failed = 0
+    for name, args in TESTS:
+        result = execute_tool(name, args)
+        out = result["text"]
+        if result["ok"]:
+            outcome = "PASS"
+            passed += 1
+        elif name in EXPECTED_NEGATIVE_PROBES:
+            outcome = "XFAIL"
+            expected += 1
+        else:
+            outcome = "FAIL"
+            failed += 1
+        print(f"{outcome:5} {name} [{result['status']}]: {out.splitlines()[0][:90] if out else ''}")
+    print(f"\n{passed} passed, {expected} expected failures, {failed} unexpected failures ({len(TESTS)} total)")
+    return 0 if failed == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -32,6 +32,9 @@ def main() -> None:
     ap.add_argument("--platform", default="", help="platform (auto-detected from title+note if empty)")
     ap.add_argument("--category", default="", help="category (auto-detected if empty)")
     ap.add_argument("--no-skill", action="store_true", help="skip skill generation")
+    ap.add_argument("--problem", default="", help="challenge problem description/statement")
+    ap.add_argument("--commands", default="", help="actual terminal commands used (newline-separated)")
+    ap.add_argument("--evidence", default="", help="captured output proving the recovered flag")
     args = ap.parse_args()
 
     auto_platform, auto_category = detect_ctf(f"{args.title} {args.note}")
@@ -55,14 +58,33 @@ def main() -> None:
         f"- category: {category}",
         f"- tools: {', '.join(args.tool) or '-'}",
         f"- flag: {args.flag}" if args.flag else "- flag: -",
+        "- provenance: manual",
         f"- iterations: 1",
         f"- tools_failed: -",
         "",
+    ]
+    if args.problem:
+        body += [
+            "## Problem Description",
+            "",
+            args.problem,
+            "",
+        ]
+    body += [
         "## What worked / lessons",
         "",
         args.note or "_(add lessons here)_",
         "",
     ]
+    if args.commands:
+        body += [
+            "## Commands / Terminal",
+            "",
+            "```bash",
+            args.commands,
+            "```",
+            "",
+        ]
     file.write_text("\n".join(body), encoding="utf-8")
     print(f"Saved: {file}")
 
@@ -101,6 +123,23 @@ Full details: `memory/{file.name}`
     from scripts.writeup import generate_writeup
     wu = generate_writeup(file)
     print(f"Writeup: {wu}")
+
+    try:
+        from ctfkit.modules.self_improve import self_improve_after_solve
+        self_improve_after_solve(
+            title=args.title,
+            category=category,
+            tools_used=args.tool,
+            flag=args.flag,
+            note=args.note,
+            problem=args.problem
+            ,commands=args.commands
+            ,evidence=args.evidence
+            ,source="manual"
+        )
+        print("Self-improvement state updated.")
+    except Exception as ex:
+        print(f"Self-improvement trigger skipped: {ex}")
 
 
 if __name__ == "__main__":

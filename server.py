@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import datetime
 import os
+import secrets
 import sys
 import time
 
@@ -39,10 +40,13 @@ from rich.progress import (
 import ctfkit.modules  # noqa: F401
 from ctfkit import __version__
 from ctfkit.cache import snapshot as cache_snapshot
-from ctfkit.registry import TOOLS, run_tool, list_tools, CATEGORIES
+from ctfkit.config import is_loopback_host, settings
+from ctfkit.registry import TOOLS, execute_tool as execute_registered_tool, run_tool, list_tools, CATEGORIES
 from ctfkit.logging import log
 
 console = Console()
+STARTED_AT = time.monotonic()
+MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
 BANNER = """[bold cyan]
  ██████╗████████╗███████╗    ██╗  ██╗██╗████████╗
@@ -76,18 +80,19 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(settings.cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-API_TOKEN = os.environ.get("CTFKIT_API_TOKEN", "")
+API_TOKEN = settings.api_token
 
 
 @app.middleware("http")
 async def _authz(request: Request, call_next):
     """Require `Authorization: Bearer <token>` on /api/* when CTFKIT_API_TOKEN is set."""
-    if API_TOKEN and request.url.path.startswith("/api") and request.method != "OPTIONS":
+    protected = request.url.path.startswith("/api") or request.url.path == "/upload"
+    if API_TOKEN and protected and request.method != "OPTIONS":
         if request.headers.get("Authorization", "") != f"Bearer {API_TOKEN}":
             return JSONResponse({"detail": "Invalid or missing API token"}, status_code=401)
     return await call_next(request)
@@ -98,16 +103,23 @@ async def _authz(request: Request, call_next):
 def health() -> dict:
     """Comprehensive telemetry, operational readiness, and tool status."""
     categories = sorted(list({t["category"] for t in TOOLS.values()}))
+    checks = {
+        "registry": len(TOOLS) > 0,
+        "memory_writable": os.access(os.path.join(os.path.dirname(__file__), "memory"), os.W_OK),
+        "testdata_present": os.path.isdir(os.path.join(os.path.dirname(__file__), "testdata")),
+    }
+    ready = all(checks.values())
     return {
-        "status": "ok",
-        "ready": True,
+        "status": "ok" if ready else "degraded",
+        "ready": ready,
         "version": __version__,
         "server_engine": "CTF Kit",
         "tools_registered": len(TOOLS),
         "categories_count": len(categories),
         "categories": categories,
         "mcp_enabled": True,
-        "uptime_seconds": round(time.monotonic(), 2),
+        "checks": checks,
+        "uptime_seconds": round(time.monotonic() - STARTED_AT, 2),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
@@ -142,7 +154,7 @@ def get_tool_detail(name: str) -> dict:
                 "type": p["type"],
                 "required": p["required"],
                 "default": p["default"],
-                "doc": p["doc"]
+                "doc": p["desc"]
             }
             for p in tool["params"]
         ]
@@ -176,7 +188,7 @@ th{{color:#94a3b8;font-size:.8em;text-transform:uppercase}} code{{color:#a5f3fc}
 
 
 @app.post("/api/run", tags=["Execution"])
-async def execute_tool(payload: dict) -> dict:
+async def execute_request(payload: dict) -> dict:
     """Execute a security or CTF tool asynchronously in worker thread pool."""
     name = payload.get("name", "")
     args = payload.get("arguments") or payload.get("args") or {}
@@ -193,23 +205,16 @@ async def execute_tool(payload: dict) -> dict:
     console.print(f"[dim]{timestamp}[/dim] [bold cyan]▶ RUNNING[/bold cyan] {icon} [bold white]{name}[/bold white] [dim]({cat})[/dim]")
 
     try:
-        result = await asyncio.get_running_loop().run_in_executor(None, run_tool, name, args)
+        result = await asyncio.get_running_loop().run_in_executor(None, execute_registered_tool, name, args)
         elapsed = (time.monotonic() - start) * 1000
-        is_error = isinstance(result, str) and result.startswith("ERROR:")
+        is_error = not result["ok"]
         
         if is_error:
             console.print(f"[dim]{timestamp}[/dim] [bold red]✖ FAILED[/bold red]  {icon} [bold white]{name}[/bold white] [red]({elapsed:.1f}ms)[/red]")
         else:
             console.print(f"[dim]{timestamp}[/dim] [bold green]✔ FINISHED[/bold green] {icon} [bold white]{name}[/bold white] [green]({elapsed:.1f}ms)[/green]")
 
-        return {
-            "ok": not is_error,
-            "name": name,
-            "category": cat,
-            "result": result,
-            "error": result if is_error else None,
-            "elapsed_ms": round(elapsed, 2)
-        }
+        return {**result, "name": name, "result": result["text"], "elapsed_ms": round(elapsed, 2)}
     except Exception as ex:
         elapsed = (time.monotonic() - start) * 1000
         console.print(f"[dim]{timestamp}[/dim] [bold red]✖ EXCEPTION[/bold red] {icon} [bold white]{name}[/bold white]: {ex}")
@@ -279,7 +284,7 @@ async def execute_category_tool(category: str, tool_name: str, payload: dict | N
             status_code=400,
             detail=f"Tool '{tool_name}' belongs to category '{tool.get('category')}', not '{category}'."
         )
-    return await execute_tool({"name": tool_name, "arguments": args})
+    return await execute_request({"name": tool_name, "arguments": args})
 
 
 @app.post("/upload", tags=["Files"])
@@ -289,11 +294,14 @@ async def upload_challenge_file(file: UploadFile = File(...)) -> dict:
     upload_dir = os.path.join(os.path.dirname(__file__), "testdata", "uploads")
     os.makedirs(upload_dir, exist_ok=True)
     clean_name = os.path.basename(file.filename or "upload.bin")
-    file_path = os.path.join(upload_dir, clean_name)
-    content = await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Upload exceeds {MAX_UPLOAD_BYTES} bytes")
+    stored_name = f"{secrets.token_hex(8)}_{clean_name}"
+    file_path = os.path.join(upload_dir, stored_name)
     with open(file_path, "wb") as f:
         f.write(content)
-    rel_path = f"testdata/uploads/{clean_name}"
+    rel_path = f"testdata/uploads/{stored_name}"
     
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     console.print(f"[dim]{timestamp}[/dim] [bold magenta]📦 UPLOADED[/bold magenta] [bold white]{clean_name}[/bold white] [dim]({len(content)} bytes -> {rel_path})[/dim]")
@@ -377,6 +385,9 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Host address (default 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Port number (default 8765)")
     args = parser.parse_args()
+
+    if not is_loopback_host(args.host) and not API_TOKEN:
+        parser.error("CTFKIT_API_TOKEN is required when binding REST to a non-loopback host")
 
     animate_initialization()
     print_server_dashboard(args.host, args.port)

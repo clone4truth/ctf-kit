@@ -311,3 +311,167 @@ def rot47(text: str, decrypt: bool = True) -> str:
     :param decrypt: decrypt
     """
     return "".join(chr(33 + ((ord(c) - 33 + 47) % 94)) if 33 <= ord(c) <= 126 else c for c in text)
+
+
+@tool(category="crypto")
+def autokey_cipher(text: str, key: str, decrypt: bool = True) -> str:
+    """Autokey cipher (Vigenere variant where the key extends itself with the plaintext).
+
+    :param text: Ciphertext or plaintext
+    :param key: Initial key word
+    :param decrypt: True to decrypt, False to encrypt
+    """
+    clean_k = [ord(c) - 65 for c in key.upper() if 'A' <= c <= 'Z']
+    if not clean_k:
+        return "ERROR: Key must contain alphabetic characters."
+
+    out = []
+    if not decrypt:
+        # Encrypt
+        full_key = list(clean_k)
+        for ch in text:
+            if 'A' <= ch.upper() <= 'Z':
+                is_upper = ch.isupper()
+                p_val = ord(ch.upper()) - 65
+                k_val = full_key[len(out)] if len(out) < len(full_key) else 0
+                full_key.append(p_val)
+                c_val = (p_val + k_val) % 26
+                out.append(chr(65 + c_val) if is_upper else chr(97 + c_val))
+            else:
+                out.append(ch)
+        return "".join(out)
+    else:
+        # Decrypt
+        full_key = list(clean_k)
+        for ch in text:
+            if 'A' <= ch.upper() <= 'Z':
+                is_upper = ch.isupper()
+                c_val = ord(ch.upper()) - 65
+                k_val = full_key[len(out)]
+                p_val = (c_val - k_val) % 26
+                full_key.append(p_val)
+                out.append(chr(65 + p_val) if is_upper else chr(97 + p_val))
+            else:
+                out.append(ch)
+        return "".join(out)
+
+
+@tool(category="crypto")
+def gronsfeld_cipher(text: str, key_digits: str, decrypt: bool = True) -> str:
+    """Gronsfeld cipher (Vigenere variant using numeric key digits 0-9).
+
+    :param text: Ciphertext or plaintext
+    :param key_digits: Numeric key string (e.g. '12345')
+    :param decrypt: True to decrypt, False to encrypt
+    """
+    digits = [int(d) for d in key_digits if d.isdigit()]
+    if not digits:
+        return "ERROR: key_digits must contain numeric characters (0-9)."
+
+    out = []
+    k_idx = 0
+    sign = -1 if decrypt else 1
+    for ch in text:
+        if 'A' <= ch <= 'Z':
+            shift = digits[k_idx % len(digits)] * sign
+            out.append(chr(65 + (ord(ch) - 65 + shift) % 26))
+            k_idx += 1
+        elif 'a' <= ch <= 'z':
+            shift = digits[k_idx % len(digits)] * sign
+            out.append(chr(97 + (ord(ch) - 97 + shift) % 26))
+            k_idx += 1
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+@tool(category="crypto")
+def bifid_cipher(text: str, key: str = "KEYWORD", period: int = 5, decrypt: bool = True) -> str:
+    """Bifid Cipher encoder/decoder (fractionated Polybius square cipher with period).
+
+    :param text: Ciphertext or plaintext
+    :param key: Alphabet key for Polybius square (J replaced by I)
+    :param period: Block period length (default 5)
+    :param decrypt: True to decrypt, False to encrypt
+    """
+    clean_k = []
+    for c in key.upper().replace("J", "I"):
+        if 'A' <= c <= 'Z' and c not in clean_k:
+            clean_k.append(c)
+    for c in "ABCDEFGHIKLMNOPQRSTUVWXYZ":
+        if c not in clean_k:
+            clean_k.append(c)
+
+    pos_map = {clean_k[i]: (i // 5 + 1, i % 5 + 1) for i in range(25)}
+    grid_map = {(i // 5 + 1, i % 5 + 1): clean_k[i] for i in range(25)}
+
+    clean_t = [c for c in text.upper().replace("J", "I") if c in pos_map]
+    if not clean_t:
+        return "ERROR: No valid alphabetic characters found in text."
+
+    out = []
+    for i in range(0, len(clean_t), period):
+        block = clean_t[i:i+period]
+        if not decrypt:
+            rows = [pos_map[c][0] for c in block]
+            cols = [pos_map[c][1] for c in block]
+            combined = rows + cols
+            for j in range(0, len(combined), 2):
+                out.append(grid_map[(combined[j], combined[j+1])])
+        else:
+            coords = []
+            for c in block:
+                r, cl = pos_map[c]
+                coords.extend([r, cl])
+            mid = len(coords) // 2
+            rows = coords[:mid]
+            cols = coords[mid:]
+            for r, cl in zip(rows, cols):
+                out.append(grid_map[(r, cl)])
+
+    return "".join(out)
+
+
+@tool(category="crypto")
+def rc4_crypt(data: str, key: str, data_is_hex: bool = False) -> str:
+    """Encrypt or decrypt data using the RC4 (Rivest Cipher 4 / ARC4) stream cipher.
+
+    :param data: Input text or hex string
+    :param key: Secret key string
+    :param data_is_hex: Set to True if data is hex-encoded
+    """
+    key_b = key.encode("utf-8")
+    if not key_b:
+        return "ERROR: Key cannot be empty."
+
+    if data_is_hex:
+        clean_h = data.strip().replace("0x", "").replace(" ", "").replace("\n", "")
+        try:
+            data_b = bytes.fromhex(clean_h)
+        except ValueError:
+            return "ERROR: Invalid hex input in data."
+    else:
+        data_b = data.encode("latin-1")
+
+    # KSA
+    S = list(range(256))
+    j = 0
+    for i in range(256):
+        j = (j + S[i] + key_b[i % len(key_b)]) % 256
+        S[i], S[j] = S[j], S[i]
+
+    # PRGA
+    i = j = 0
+    out = bytearray()
+    for b in data_b:
+        i = (i + 1) % 256
+        j = (j + S[i]) % 256
+        S[i], S[j] = S[j], S[i]
+        k = S[(S[i] + S[j]) % 256]
+        out.append(b ^ k)
+
+    try:
+        text_utf8 = out.decode("utf-8")
+        return f"RC4 Result (UTF-8 Text):\n{text_utf8}\n\nHex:\n{out.hex()}"
+    except UnicodeDecodeError:
+        return f"RC4 Result (Latin-1 / Binary):\n{out.decode('latin-1', errors='replace')}\n\nHex:\n{out.hex()}"

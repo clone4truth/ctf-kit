@@ -593,6 +593,94 @@ def section_text(lines: list[str], header: str) -> str:
     return "\n".join(out).strip()
 
 
+
+def first_section(lines: list[str], headers: list[str]) -> str:
+    """Return first non-empty section body from a list of possible headers."""
+    for h in headers:
+        txt = section_text(lines, h)
+        if txt:
+            return txt
+    return ""
+
+
+def clean_fenced(text: str) -> str:
+    """Remove markdown fence lines but keep actual command/evidence text."""
+    return "\n".join(l for l in text.splitlines() if l.strip() != "```").strip()
+
+
+def parse_manual_commands(lines: list[str]) -> list[str]:
+    """Extract real terminal commands from memory sections.
+
+    Supported sections: Commands / Terminal, Terminal Commands, Commands, PoC.
+    Keeps fenced bash lines and plain command-like lines. This prevents generated
+    writeups from falling back to generic playbooks when the solve used manual
+    curl/python/Burp actions rather than MCP tool runs.
+    """
+    raw = first_section(lines, ["Commands / Terminal", "Terminal Commands", "Commands", "Terminal", "PoC"])
+    cmds: list[str] = []
+    in_fence = False
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not stripped:
+            continue
+        if in_fence:
+            cmds.append(stripped)
+            continue
+        # Accept numbered/listed command lines and obvious shell/python tooling.
+        stripped = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", stripped)
+        if re.match(r"^(curl|python3?|bash|sh|nmap|ffuf|gobuster|sqlmap|tshark|binwalk|exiftool|file|strings|xxd|7z|unzip|steghide|zsteg|stegseek|openssl|hashcat|john|gdb|r2|objdump|readelf|git)\b", stripped):
+            cmds.append(stripped)
+    return list(dict.fromkeys(cmds))
+
+
+def manual_poc_md(lines: list[str], category: str) -> str:
+    """Render a human-authored PoC section from memory when no MCP runs exist."""
+    poc = first_section(lines, ["PoC", "Proof of Concept", "Steps", "Approach"])
+    cmds = parse_manual_commands(lines)
+    out: list[str] = []
+    if poc:
+        out.append(clean_fenced(poc))
+    if cmds:
+        if out:
+            out.append("")
+        out.append("**Executed Terminal Commands:**")
+        out.append("")
+        out.append("```bash")
+        out.extend(cmds)
+        out.append("```")
+    if not out:
+        return ""
+    return "\n".join(out)
+
+
+def burp_poc_md(runs: list[tuple[str, str, str, str]], category: str, pb: dict) -> str:
+    """Generate Burp-specific PoC. For web, include actual Repeater requests from recorded http_request runs."""
+    if category != "web":
+        return "Burp Suite is not applicable for this category. Follow the terminal / MCP tool flow in the PoC above."
+    blocks: list[str] = []
+    for i, (tool, args_json, ok, _) in enumerate(runs, 1):
+        if tool != "http_request":
+            continue
+        args = _args_obj(args_json)
+        if not args.get("url"):
+            continue
+        blocks.append(f"### Request {i} — Burp Repeater")
+        blocks.append("")
+        blocks.append("1. Proxy → HTTP history: Select the target request, right-click and choose **Send to Repeater**.")
+        blocks.append("2. Configure/paste the following request in Repeater, then click **Send**.")
+        blocks.append("3. Check status code, redirect/cookie headers, and response body; forward body to `extract_flags_tool`.")
+        blocks.append("")
+        blocks.append("```http")
+        blocks.append(http_to_burp(args))
+        blocks.append("```")
+        blocks.append("")
+    if blocks:
+        return "\n".join(blocks)
+    return "\n".join(pb["burp"])
+
 def parse_runs(lines: list[str]) -> list[tuple[str, str, str, str]]:
     """Parse '## Approach' run lines: - `tool` (args_json) → ok|failed [out: snippet].
 
@@ -852,10 +940,10 @@ def run_step_md(run: tuple[str, str, str, str], category: str, idx: int) -> str:
     flag = "✓" if ok == "ok" else "✗"
     out_lines = [f"### Step {idx} — {flag} {title}"]
     out_lines.append("")
-    out_lines.append(f"**Teknik:** {technique}")
+    out_lines.append(f"**Technique:** {technique}")
     if args:
         out_lines.append("")
-        out_lines.append(f"**Args terekam:** `{fmt_args(args_json)}`")
+        out_lines.append(f"**Recorded Arguments:** `{fmt_args(args_json)}`")
     out_lines.append("")
     if tool == "http_request" and args.get("url"):
         out_lines.append("**Terminal (curl):**")
@@ -865,7 +953,7 @@ def run_step_md(run: tuple[str, str, str, str], category: str, idx: int) -> str:
         out_lines.append("```")
         if category == "web":
             out_lines.append("")
-            out_lines.append("**Burp Suite — Repeater (paste request ini):**")
+            out_lines.append("**Burp Suite — Repeater (paste this request):**")
             out_lines.append("")
             out_lines.append("```http")
             out_lines.append(http_to_burp(args))
@@ -878,7 +966,7 @@ def run_step_md(run: tuple[str, str, str, str], category: str, idx: int) -> str:
         out_lines.append("```")
     if out:
         out_lines.append("")
-        out_lines.append("**Evidence (output aktual):**")
+        out_lines.append("**Evidence (Actual Output):**")
         out_lines.append("")
         out_lines.append("```")
         out_lines.append(out[:600])
@@ -916,6 +1004,10 @@ def generate_writeup(memory_file: Path, steps: str = "") -> Path:
     flag = field(lines, "flag:")
     runs = parse_runs(lines)
     lessons = section_text(lines, "What worked / lessons")
+    # Parse problem description from memory file (new field)
+    problem_text = first_section(lines, ["Problem Description", "Problem / Soal", "Problem", "Description", "Challenge"])
+    # Parse actual commands used from memory file (new field)
+    mem_commands = parse_manual_commands(lines)
     evidence = section_text(lines, "Evidence snippet") or section_text(lines, "Result")
     evidence_lines = [l for l in evidence.splitlines() if l.strip() != "```"]
     evidence = "\n".join(evidence_lines).strip()
@@ -924,7 +1016,8 @@ def generate_writeup(memory_file: Path, steps: str = "") -> Path:
 
     pb = PLAYBOOKS.get(category, PLAYBOOKS["misc"])
 
-    # ---- Step-by-step: explicit override wins; else real recorded runs; else playbook ----
+    # ---- Step-by-step: explicit override wins; else real recorded runs; else manual PoC; else playbook ----
+    manual_poc = manual_poc_md(lines, category)
     if steps.strip():
         steps_lines = [("step", s) for s in steps.strip().splitlines()]
     else:
@@ -942,6 +1035,8 @@ def generate_writeup(memory_file: Path, steps: str = "") -> Path:
     elif runs:
         for i, run in enumerate(runs, 1):
             step_md_lines.append(run_step_md(run, category, i))
+    elif manual_poc:
+        step_md_lines.append(manual_poc)
     else:
         # Fallback: playbook phases as the guide — flag the placeholders explicitly
         step_md_lines.append(
@@ -986,9 +1081,32 @@ def generate_writeup(memory_file: Path, steps: str = "") -> Path:
                 target_url = args["url"]
                 break
 
+    terminal_playbook = "\n".join(pb["terminal"])
+    evidence_md = ("```\n" + evidence + "\n```") if evidence else "_(attach key output: response body, decoded text, crash log)_"
+
+    # ---- Burp Suite PoC: only for web, with actual recorded requests ----
+    burp_md = burp_poc_md(runs, category, pb)
+
+    # ---- Actual commands section: prefer real commands from memory, fallback to recorded runs ----
+    actual_cmds_md = ""
+    if mem_commands:
+        actual_cmds_md = "```bash\n" + "\n".join(mem_commands) + "\n```"
+    elif runs:
+        cmd_lines = []
+        for tool_name, args_json, ok, _ in runs:
+            if tool_name == "http_request":
+                a = _args_obj(args_json)
+                if a.get("url"):
+                    cmd_lines.append(http_to_curl(a))
+            else:
+                cmd_lines.append(run_tool_cmd(tool_name, args_json))
+        actual_cmds_md = "```bash\n" + "\n".join(cmd_lines) + "\n```"
+    else:
+        actual_cmds_md = "_(no commands recorded — provide the actual commands used)_"
+
     body = f"""# {title}
 
-> POC Writeup — complete end-to-end reproduction (auto-generated from memory, agent-augmented).
+> **PoC Writeup** — Proof of Concept CTF challenge walkthrough, generated from actual tools, commands, and steps used during the solve.
 
 | Field | Value |
 |---|---|
@@ -1000,52 +1118,74 @@ def generate_writeup(memory_file: Path, steps: str = "") -> Path:
 | Source memory | `{memory_file.name}` |
 {("| Target | `" + target_url + "` |") if target_url else ""}
 
-## 1. TL;DR — best & fastest technique
+---
 
-Minimal path: {", ".join(tools) or "N/A"} → flag recovered.
-{("Technique: `" + runs[-1][0] + "` (last successful run) → `" + flag + "`") if runs else ""}
+## 1. Problem Description
 
-## 2. Attack chain
+{problem_text or "_(problem description not provided — add challenge statement)_"}
 
-{chain_md}
+---
 
-## 3. Step-by-step (start → finish)
+## 2. TL;DR
+
+**Tools:** {", ".join(f"`{t}`" for t in tools) or "N/A"}
+**Technique:** {lessons.split(chr(10))[0] if lessons and not lessons.startswith("_") else "see PoC below"}
+**Flag:** `{flag}`
+
+---
+
+## 3. Attack Chain
+
+{chain_md or "_(no attack chain recorded)_"}
+
+---
+
+## 4. PoC Walkthrough (Step-by-Step)
 
 {step_md}
 
-## 4. Tools & commands
+---
 
-### 4.1 Terminal — {category.upper()} playbook
+## 5. Terminal Commands Used
 
-```bash
-{"\n".join(pb["terminal"])}
-```
+### 5.1 Actual Commands
 
-### 4.2 BurpSuite
+{actual_cmds_md}
 
-{"\n".join(pb["burp"])}
-
-## 5. Agent reproduction (ctf-kit)
-
-Replay the exact same solve:
+### 5.2 Replay via ctf-kit (MCP/CLI)
 
 {repro_md}
 
-Run all ctf-tools via MCP (`ctf-tools <tool>`) or the CLI above. On future
-challenges, first run `recall_knowledge` with keywords from this writeup
-(`{", ".join(tools[:3]) or "flag"}`) — the technique will be auto-loaded.
+---
+"""
 
-## 6. Evidence
+    # Burp Suite section: only include for web category
+    if category == "web":
+        body += f"""## 6. Burp Suite PoC
 
-{("```\n" + evidence + "\n```") if evidence else "_(attach key output: response body, decoded text, crash log)_"}
+{burp_md}
 
-## 7. What worked / lessons
+---
+
+"""
+
+    body += f"""## {"6" if category != "web" else "7"}. Evidence
+
+{evidence_md}
+
+---
+
+## {"7" if category != "web" else "8"}. What Worked / Lessons
 
 {lessons}
 
-## 8. Flag
+---
 
-`{flag}`
+## {"8" if category != "web" else "9"}. Flag
+
+```
+{flag}
+```
 """
     target.write_text(body, encoding="utf-8")
     return target

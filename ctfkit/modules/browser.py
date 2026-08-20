@@ -12,6 +12,7 @@ and restored across browser_agent calls with the same session_id.
 import json
 import os
 import urllib.request
+import re
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,8 @@ def header_report(headers: dict) -> list[str]:
 def _session_file(session_id: str) -> Path:
     """Get session file path for cookie/localStorage persistence."""
     Path(SESSION_DIR).mkdir(parents=True, exist_ok=True)
-    return Path(SESSION_DIR) / f"{session_id}.json"
+    safe_id = re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)[:80]
+    return Path(SESSION_DIR) / f"{safe_id}.json"
 
 
 def _load_session(session_id: str) -> dict:
@@ -59,6 +61,10 @@ def _save_session(session_id: str, cookies: list, localStorage: dict):
     """Save cookies and localStorage to session file."""
     path = _session_file(session_id)
     path.write_text(json.dumps({"cookies": cookies, "localStorage": localStorage}, indent=2), encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _driver(session_id: str = ""):
@@ -113,7 +119,9 @@ def browser_agent(action: str = "full", url: str = "", js: str = "", out_path: s
     """
     if not url:
         return "ERROR: url is required for this action."
-    path = out_path or os.path.join(SHOT_DIR, "shot.png")
+    shot_root = Path(SHOT_DIR).resolve()
+    path_obj = (shot_root / (Path(out_path).name if out_path else "shot.png")).resolve()
+    path = str(path_obj)
     try:
         driver = _driver(session_id)
     except Exception as ex:

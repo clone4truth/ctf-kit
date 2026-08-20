@@ -249,3 +249,235 @@ def whois_query(domain: str, server: str = "whois.iana.org") -> str:
         if not ref_out.startswith("__ERR__"):
             out = f"referral -> {ref}\n\n" + ref_out
     return out[:5000]
+
+
+@tool(category="osint")
+def mac_oui_lookup(mac_address: str) -> str:
+    """Lookup Organizationally Unique Identifier (OUI) hardware vendor from a MAC address.
+
+    :param mac_address: MAC address string (e.g. 'B8:27:EB:12:34:56', '00-50-56-C0-00-01')
+    """
+    clean = mac_address.replace(":", "").replace("-", "").replace(".", "").upper().strip()
+    if len(clean) < 6:
+        return "ERROR: MAC address must have at least 6 hex characters (OUI prefix)."
+
+    oui = clean[:6]
+
+    KNOWN_OUIS = {
+        "B827EB": "Raspberry Pi Foundation",
+        "DCA632": "Raspberry Pi Trading Ltd",
+        "E45F01": "Raspberry Pi Trading Ltd",
+        "28CDC1": "Raspberry Pi Trading Ltd",
+        "005056": "VMware, Inc.",
+        "000C29": "VMware, Inc.",
+        "000569": "VMware, Inc.",
+        "080027": "PCS Systemtechnik GmbH (VirtualBox)",
+        "525400": "QEMU / KVM Virtual NIC",
+        "00163E": "XenSource, Inc.",
+        "00155D": "Microsoft Corporation (Hyper-V)",
+        "240AC4": "Espressif Inc. (ESP32/ESP8266)",
+        "30AEA4": "Espressif Inc. (ESP32/ESP8266)",
+        "A4E57C": "Espressif Inc. (ESP32/ESP8266)",
+        "AC67B2": "Espressif Inc. (ESP32/ESP8266)",
+        "001A79": "Apple, Inc.",
+        "ACDE48": "Apple, Inc.",
+        "F01898": "Apple, Inc.",
+        "001422": "Dell Inc.",
+        "001E67": "Intel Corporation",
+        "001B21": "Intel Corporate",
+        "00049F": "Freescale Semiconductor",
+        "001A11": "Google, Inc.",
+        "F4F5D8": "Google, Inc.",
+        "001F6C": "Cisco Systems, Inc.",
+        "002414": "Cisco Systems, Inc.",
+        "708105": "Cisco Systems, Inc.",
+    }
+
+    vendor = KNOWN_OUIS.get(oui, "Vendor not found in standard offline database.")
+
+    return (
+        f"MAC Address : {mac_address}\n"
+        f"OUI Prefix  : {oui[:2]}:{oui[2:4]}:{oui[4:6]}\n"
+        f"Vendor / Org: {vendor}"
+    )
+
+
+@tool(category="osint")
+def linux_netstat_parse(netstat_or_ss_output: str) -> str:
+    """Parse Linux netstat, ss -tlpn, or /proc/net/tcp output, identifying listening internal & external network ports.
+
+    :param netstat_or_ss_output: Raw text output from 'ss -tlpn', 'netstat -tulpn', or '/proc/net/tcp'
+    """
+    lines = netstat_or_ss_output.strip().splitlines()
+    entries = []
+
+    for l in lines:
+        l_str = l.strip()
+        if not l_str or l_str.startswith("State") or l_str.startswith("Proto") or l_str.startswith("sl"):
+            continue
+
+        parts = l_str.split()
+        # 1. Standard /proc/net/tcp format: sl local_address rem_address st tx_queue ...
+        if len(parts) >= 4 and ":" in parts[1] and len(parts[1].split(":")[0]) == 8:
+            try:
+                # Hex IP:Port
+                ip_hex, port_hex = parts[1].split(":")
+                port = int(port_hex, 16)
+                ip_bytes = bytes.fromhex(ip_hex)[::-1]
+                ip_str = ".".join(str(b) for b in ip_bytes)
+                st = parts[3]
+                if st == "0A":  # TCP_LISTEN
+                    scope = "🔒 INTERNAL ONLY" if ip_str.startswith("127.") or ip_str == "0.0.0.0" else "🌐 PUBLIC"
+                    entries.append(f"  TCP {ip_str}:{port:<5} | LISTEN | {scope}")
+                continue
+            except Exception:
+                pass
+
+        # 2. Standard ss / netstat format: tcp LISTEN 0 128 127.0.0.1:8080 0.0.0.0:* ...
+        for p in parts:
+            if ":" in p and any(p.startswith(pref) for pref in ("127.", "0.0.0.0", "*:", "[::]", ":::")):
+                scope = "🔒 LOCALHOST ONLY" if "127." in p or "localhost" in p else "🌐 PUBLIC / ALL INTERFACES"
+                entries.append(f"  {p:<28} | {scope}")
+                break
+
+    if not entries:
+        return "No active listening sockets parsed from input."
+
+    return f"Linux Listening Ports Audit ({len(entries)} socket(s)):\n\n" + "\n\n".join(entries)
+
+
+@tool(category="osint")
+def linux_arp_table_parse(arp_output_or_path: str = "/proc/net/arp") -> str:
+    """Parse Linux /proc/net/arp or 'ip neigh' / 'arp -a' output to discover active local network neighbors.
+
+    :param arp_output_or_path: Path to /proc/net/arp or raw text output from 'arp -n' / 'ip neigh'
+    """
+    import os
+    if os.path.exists(arp_output_or_path):
+        content = open(arp_output_or_path, "r", errors="ignore").read()
+    else:
+        content = arp_output_or_path
+
+    lines = content.strip().splitlines()
+    entries = []
+
+    for l in lines:
+        l_str = l.strip()
+        if not l_str or l_str.startswith("IP address") or l_str.startswith("Address"):
+            continue
+
+        parts = l_str.split()
+        # Format 1: IP HW_type Flags HW_address Mask Device (/proc/net/arp)
+        if len(parts) >= 6 and ":" in parts[3]:
+            ip = parts[0]
+            mac = parts[3]
+            device = parts[5]
+            flags = "Incomplete" if parts[2] == "0x0" else "Reachable / Complete"
+            entries.append(f"  IP: {ip:<15} | MAC: {mac:<17} | Dev: {device:<6} | State: {flags}")
+        # Format 2: ip neigh (192.168.1.1 dev eth0 lladdr 00:11:22:33:44:55 REACHABLE)
+        elif "lladdr" in l_str:
+            ip = parts[0]
+            mac_idx = parts.index("lladdr") + 1
+            mac = parts[mac_idx] if mac_idx < len(parts) else "?"
+            state = parts[-1]
+            entries.append(f"  IP: {ip:<15} | MAC: {mac:<17} | State: {state}")
+
+    if not entries:
+        return "No ARP entries parsed from input."
+
+    return f"Linux ARP / Neighbor Cache ({len(entries)} device(s)):\n\n" + "\n".join(entries)
+
+
+@tool(category="osint")
+def email_header_analyzer(header_text_or_path: str) -> str:
+    """Analyze raw email (RFC 822 / MIME) headers, tracing relay hops, originating IP, and SPF/DKIM validation.
+
+    :param header_text_or_path: Raw email header text or path to .eml / header file
+    """
+    import os
+    import re
+
+    if os.path.exists(header_text_or_path):
+        content = open(header_text_or_path, "r", errors="ignore").read()
+    else:
+        content = header_text_or_path
+
+    lines = content.splitlines()
+    headers = {}
+    current_key = None
+    received_hops = []
+
+    for l in lines:
+        if not l.strip() and not headers:
+            continue
+        if not l.strip() and headers:
+            break  # End of headers
+
+        if l.startswith(" ") or l.startswith("\t"):
+            if current_key:
+                headers[current_key] += " " + l.strip()
+        elif ":" in l:
+            k, v = l.split(":", 1)
+            current_key = k.strip().lower()
+            if current_key == "received":
+                received_hops.append(v.strip())
+            else:
+                headers[current_key] = v.strip()
+
+    out = ["=== Email Header Analysis ==="]
+    for key in ("from", "to", "subject", "date", "message-id", "return-path", "reply-to"):
+        if key in headers:
+            out.append(f"  {key.capitalize():<14} : {headers[key]}")
+
+    # SPF / DKIM / DMARC
+    for auth_key in ("authentication-results", "received-spf", "dkim-signature", "arc-authentication-results"):
+        if auth_key in headers:
+            out.append(f"  {auth_key:<14} : {headers[auth_key][:120]}...")
+
+    if received_hops:
+        out.append(f"\nMail Transit Hops ({len(received_hops)} hops, listed chronologically):")
+        # Reverse to show origin first
+        for idx, hop in enumerate(reversed(received_hops), 1):
+            ip_match = re.search(r"\[([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})\]", hop)
+            ip_str = f" [IP: {ip_match.group(1)}]" if ip_match else ""
+            out.append(f"  Hop {idx}: {hop[:100]}...{ip_str}")
+
+    return "\n".join(out)
+
+
+@tool(category="osint")
+def asn_ip_lookup(ip_address: str) -> str:
+    """Lookup Autonomous System Number (ASN), BGP prefix, and ISP routing information for an IP address.
+
+    :param ip_address: IPv4 address to lookup (e.g. '8.8.8.8')
+    """
+    import socket
+    clean_ip = ip_address.strip()
+    parts = clean_ip.split(".")
+    if len(parts) != 4 or not all(p.isdigit() for p in parts):
+        return "ERROR: Invalid IPv4 address format."
+
+    rev_ip = ".".join(reversed(parts))
+    query = f"{rev_ip}.origin.asn.cymru.com"
+
+    try:
+        # Query TXT record using socket / getaddrinfo or DNS
+        import subprocess
+        res = subprocess.run(["dig", "+short", "TXT", query], capture_output=True, text=True, timeout=5)
+        txt = res.stdout.strip().replace('"', '')
+        if txt:
+            # Format: "ASN | Prefix | CC | Registry | Allocated"
+            tokens = [t.strip() for t in txt.split("|")]
+            lines = [
+                f"ASN Routing Intelligence for {clean_ip}:",
+                f"  Autonomous System: AS{tokens[0]}",
+                f"  BGP Prefix       : {tokens[1]}",
+                f"  Country Code     : {tokens[2]}",
+                f"  Registry         : {tokens[3]}",
+                f"  Allocated Date   : {tokens[4] if len(tokens) > 4 else 'N/A'}"
+            ]
+            return "\n".join(lines)
+        else:
+            return f"No ASN record found for {clean_ip}."
+    except Exception as ex:
+        return f"ASN lookup query failed: {ex}"

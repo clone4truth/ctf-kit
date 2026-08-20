@@ -224,7 +224,7 @@ def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
     data = open(pcap_path, "rb").read()
     flows = {}
     n_packets = 0
-    
+
     for link_type, pkt in _iter_packets(data):
         n_packets += 1
         if link_type == 1:  # Ethernet
@@ -236,7 +236,7 @@ def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
             eth_type = 0x0800
         else:
             continue
-            
+
         if eth_type != 0x0800 or len(pkt) < 20:
             continue
         ihl = (pkt[0] & 0x0F) * 4
@@ -251,10 +251,10 @@ def pcap_http(pcap_path: str, max_flows: int = 20) -> str:
             continue
         flow = (sport, dport) if sport < dport else (dport, sport)
         flows.setdefault(flow, []).append(payload)
-        
+
     if not n_packets:
         return "Could not read any packets from file (unsupported format or empty capture)."
-        
+
     out = [f"{n_packets} packets read, {len(flows)} TCP flows found"]
     for (sa, da), chunks in list(flows.items())[:max_flows]:
         blob = b"".join(chunks)
@@ -274,7 +274,7 @@ def pcap_dns_exfil(pcap_path: str) -> str:
     """
     data = open(pcap_path, "rb").read()
     queries = []
-    
+
     for link_type, pkt in _iter_packets(data):
         if link_type == 1:
             if len(pkt) < 14:
@@ -285,23 +285,23 @@ def pcap_dns_exfil(pcap_path: str) -> str:
             eth_type = 0x0800
         else:
             continue
-            
+
         if eth_type != 0x0800 or len(pkt) < 28:
             continue
         ihl = (pkt[0] & 0x0F) * 4
         proto = pkt[9]
         if proto != 17 or len(pkt) < ihl + 8:  # UDP
             continue
-            
+
         sport = int.from_bytes(pkt[ihl:ihl + 2], "big")
         dport = int.from_bytes(pkt[ihl + 2:ihl + 4], "big")
         if dport != 53 and sport != 53:
             continue
-            
+
         udp_payload = pkt[ihl + 8:]
         if len(udp_payload) < 12:
             continue
-            
+
         # Parse DNS Question
         pos = 12
         domain_parts = []
@@ -315,20 +315,20 @@ def pcap_dns_exfil(pcap_path: str) -> str:
             part = udp_payload[pos:pos + length].decode("latin-1", "replace")
             domain_parts.append(part)
             pos += length
-            
+
         if domain_parts:
             full_domain = ".".join(domain_parts)
             if full_domain not in queries:
                 queries.append(full_domain)
-                
+
     if not queries:
         return "No DNS queries found in PCAP."
-        
+
     out = [f"Found {len(queries)} unique DNS queries:\n"]
     out.extend(f"  {q}" for q in queries[:40])
     if len(queries) > 40:
         out.append(f"  ... ({len(queries) - 40} more queries)")
-        
+
     # Attempt extraction of hex or base64 subdomains
     subdomains = [q.split(".")[0] for q in queries]
     joined_hex = "".join(s for s in subdomains if re.fullmatch(r"[0-9a-fA-F]+", s))
@@ -338,7 +338,7 @@ def pcap_dns_exfil(pcap_path: str) -> str:
             out.append(f"\n🏆 Decoded Hex Exfiltration ({len(raw)} bytes):\n{printable(raw, 500)}")
         except Exception:
             pass
-            
+
     return "\n".join(out)
 
 
@@ -366,7 +366,7 @@ def pcap_usb_keystrokes(pcap_path: str) -> str:
     """
     data = open(pcap_path, "rb").read()
     typed = []
-    
+
     for link_type, pkt in _iter_packets(data):
         # Look for 8-byte HID keyboard report: [modifier, reserved, key1, key2, ...]
         hid_data = None
@@ -375,14 +375,14 @@ def pcap_usb_keystrokes(pcap_path: str) -> str:
         elif len(pkt) >= 8 and (b"\x00\x00" in pkt or len(pkt) in (27, 35, 64)):
             # USB header offset extraction
             hid_data = pkt[-8:]
-            
+
         if not hid_data or len(hid_data) != 8:
             continue
-            
+
         mod = hid_data[0]
         shift = bool(mod & 0x22)
         keycode = hid_data[2]
-        
+
         if keycode in _USB_HID_KEYS:
             char = _USB_HID_KEYS[keycode][1 if shift else 0]
             if char == '[BACKSPACE]':
@@ -390,7 +390,7 @@ def pcap_usb_keystrokes(pcap_path: str) -> str:
                     typed.pop()
             else:
                 typed.append(char)
-                
+
     result = "".join(typed)
     return (f"🏆 Reconstructed USB Keystrokes ({len(typed)} characters):\n"
             f"----------------------------------------\n"
@@ -406,7 +406,7 @@ def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
     """
     data = bytearray(open(zip_path, "rb").read())
     fixed_count = 0
-    
+
     # Check Local File Headers (PK\x03\x04)
     pos = 0
     while True:
@@ -418,7 +418,7 @@ def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
             data[pos + 6] &= 0xFE  # clear bit 0
             fixed_count += 1
         pos += 4
-        
+
     # Check Central Directory Headers (PK\x01\x02)
     pos = 0
     while True:
@@ -430,14 +430,14 @@ def zip_fix_pseudo_encrypt(zip_path: str, out_path: str = "") -> str:
             data[pos + 8] &= 0xFE  # clear bit 0
             fixed_count += 1
         pos += 4
-        
+
     if fixed_count == 0:
         return "No pseudo-encryption flags found in ZIP archive (headers appear normal)."
-        
+
     dest = out_path or (os.path.splitext(zip_path)[0] + "_unlocked.zip")
     with open(dest, "wb") as f:
         f.write(data)
-        
+
     return (f"🏆 Successfully fixed {fixed_count} pseudo-encryption flags in ZIP!\n"
             f"Unlocked archive saved to: {dest}\n"
             f"You can now extract {dest} without a password prompt.")
@@ -456,16 +456,16 @@ def exif_gps_map(image_path: str) -> str:
             return "No EXIF metadata found in image."
     except Exception as ex:
         return f"Failed to read image EXIF: {ex}"
-        
+
     gps_info = None
     for tag_id, val in exif.items():
         if ExifTags.TAGS.get(tag_id) == "GPSInfo":
             gps_info = val
             break
-            
+
     if not gps_info:
         return "No GPSInfo tag found in EXIF metadata."
-        
+
     def to_deg(val):
         if not val:
             return 0.0
@@ -474,23 +474,23 @@ def exif_gps_map(image_path: str) -> str:
         m_val = m[0] / m[1] if isinstance(m, tuple) else float(m)
         s_val = s[0] / s[1] if isinstance(s, tuple) else float(s)
         return d_val + (m_val / 60.0) + (s_val / 3600.0)
-        
+
     lat_ref = gps_info.get(1, "N")
     lat_val = to_deg(gps_info.get(2))
     if lat_ref == "S":
         lat_val = -lat_val
-        
+
     lon_ref = gps_info.get(3, "E")
     lon_val = to_deg(gps_info.get(4))
     if lon_ref == "W":
         lon_val = -lon_val
-        
+
     alt = gps_info.get(6, 0)
     alt_val = alt[0] / alt[1] if isinstance(alt, tuple) else float(alt)
-    
+
     gmaps_url = f"https://www.google.com/maps?q={lat_val:.6f},{lon_val:.6f}"
     osm_url = f"https://www.openstreetmap.org/?mlat={lat_val:.6f}&mlon={lon_val:.6f}#map=16/{lat_val:.6f}/{lon_val:.6f}"
-    
+
     return (f"📍 EXIF GPS Coordinates Located:\n"
             f"Latitude  : {lat_val:.6f}° ({lat_ref})\n"
             f"Longitude : {lon_val:.6f}° ({lon_ref})\n"
@@ -679,3 +679,603 @@ def pdf_analyze(path: str, object_id: int = 0) -> str:
         out.append("")
         out.append("FLAG CANDIDATES: " + ", ".join(hits))
     return "\n".join(out)[:12000]
+
+
+@tool(category="forensics")
+def pcap_credentials_extract(pcap_path: str) -> str:
+    """Extract plaintext credentials from PCAP (HTTP Basic Auth, FTP USER/PASS, SMTP AUTH, Telnet, POST data).
+
+    :param pcap_path: Path to the PCAP capture file
+    """
+    import base64
+    import os
+
+    if not os.path.exists(pcap_path):
+        return f"ERROR: File not found: {pcap_path}"
+
+    data = open(pcap_path, "rb").read()
+    creds = []
+    seen = set()
+
+    for link_type, pkt in _iter_packets(data):
+        if link_type == 1 and len(pkt) > 14:
+            pkt = pkt[14:]
+        if len(pkt) < 20:
+            continue
+        ihl = (pkt[0] & 0x0F) * 4
+        if len(pkt) < ihl + 20 or pkt[9] != 6:  # TCP only
+            continue
+        tcp_off = ((pkt[ihl + 12] >> 4) & 0x0F) * 4
+        payload = pkt[ihl + tcp_off:]
+        if not payload:
+            continue
+
+        text = payload.decode("latin-1", errors="ignore")
+
+        # 1. HTTP Basic Auth
+        for m in re.finditer(r"Authorization:\s*Basic\s+([A-Za-z0-9+/=]+)", text, re.IGNORECASE):
+            b64_val = m.group(1)
+            try:
+                dec = base64.b64decode(b64_val).decode("utf-8", errors="replace")
+                entry = f"[HTTP Basic Auth] -> {dec}"
+                if entry not in seen:
+                    seen.add(entry)
+                    creds.append(entry)
+            except Exception:
+                pass
+
+        # 2. FTP USER / PASS
+        for m in re.finditer(r"(?:USER|PASS)\s+([^\r\n]+)", text):
+            entry = f"[FTP] -> {m.group(0)}"
+            if entry not in seen:
+                seen.add(entry)
+                creds.append(entry)
+
+        # 3. HTTP Form POST login
+        if "POST " in text and ("password=" in text or "pass=" in text or "user=" in text):
+            post_body = text.split("\r\n\r\n", 1)[-1][:300].strip()
+            if post_body and any(k in post_body for k in ("pass=", "password=", "user=", "token=")):
+                entry = f"[HTTP POST Form] -> {post_body}"
+                if entry not in seen:
+                    seen.add(entry)
+                    creds.append(entry)
+
+    if not creds:
+        return "No standard plaintext credentials (HTTP Basic, FTP, Form POST) detected in capture."
+
+    return f"Extracted {len(creds)} Credential(s) from PCAP:\n\n" + "\n".join(f"  {c}" for c in creds[:50])
+
+
+@tool(category="forensics")
+def mbr_gpt_analyze(file_path: str) -> str:
+    """Inspect Master Boot Record (MBR) partition tables and GUID Partition Table (GPT) disk headers.
+
+    :param file_path: Path to the raw disk / image file
+    """
+    import os
+    import struct
+
+    if not os.path.exists(file_path):
+        return f"ERROR: File not found: {file_path}"
+
+    fsize = os.path.getsize(file_path)
+    if fsize < 512:
+        return "ERROR: File size smaller than 512-byte sector."
+
+    with open(file_path, "rb") as f:
+        sector0 = f.read(512)
+        sector1 = f.read(512) if fsize >= 1024 else b""
+
+    lines = [
+        f"Disk Image: {file_path} ({fsize} bytes / {fsize / (1024*1024):.2f} MB)",
+        f"MBR Boot Signature (offset 510): {sector0[510:512].hex().upper()}"
+    ]
+
+    # Check MBR Partition Table at 0x1BE (4 entries of 16 bytes)
+    PART_TYPES = {
+        0x00: "Empty", 0x01: "FAT12", 0x04: "FAT16 <32M", 0x05: "Extended",
+        0x06: "FAT16", 0x07: "NTFS / exFAT", 0x0B: "FAT32 (CHS)", 0x0C: "FAT32 (LBA)",
+        0x0E: "FAT16 (LBA)", 0x0F: "Extended (LBA)", 0x82: "Linux Swap",
+        0x83: "Linux Native (ext2/ext3/ext4)", 0x8E: "Linux LVM", 0xEE: "GPT Protective MBR",
+        0xEF: "EFI System Partition"
+    }
+
+    lines.append("\n=== MBR Partition Table ===")
+    for i in range(4):
+        offset = 0x1BE + i * 16
+        entry = sector0[offset:offset+16]
+        boot_flag, start_chs, p_type, end_chs, lba_start, num_sectors = struct.unpack("<B3sB3sII", entry)
+        if p_type != 0x00 or num_sectors != 0:
+            type_name = PART_TYPES.get(p_type, f"Unknown (0x{p_type:02x})")
+            boot_str = "BOOTABLE" if boot_flag == 0x80 else "Normal"
+            size_mb = (num_sectors * 512) / (1024 * 1024)
+            lines.append(
+                f"  Partition {i+1}: Type 0x{p_type:02x} ({type_name}) | {boot_str}\n"
+                f"    LBA Start   : {lba_start} (byte offset 0x{lba_start * 512:x})\n"
+                f"    Sectors     : {num_sectors} ({size_mb:.2f} MB)"
+            )
+
+    # Check GPT Signature in Sector 1
+    if sector1.startswith(b"EFI PART"):
+        lines.append("\n=== GPT Header Detected (Sector 1) ===")
+        gpt_sig, gpt_rev, hdr_size, hdr_crc, res, cur_lba, bkp_lba, first_lba, last_lba = struct.unpack("<8sIIIIQQQQ", sector1[:56])
+        lines.append(
+            f"  GPT Revision : 0x{gpt_rev:08x}\n"
+            f"  Current LBA  : {cur_lba}\n"
+            f"  First Usable : LBA {first_lba}\n"
+            f"  Last Usable  : LBA {last_lba}"
+        )
+
+    return "\n".join(lines)
+
+
+@tool(category="forensics")
+def linux_shadow_hash_analyze(shadow_entry: str) -> str:
+    """Analyze a Linux /etc/shadow password hash entry, identifying algorithm, salt, rounds, and hash format.
+
+    :param shadow_entry: Full /etc/shadow line or hash string (e.g. 'root:$6$rounds=5000$saltsalt$hash...:19000:0:99999:7:::')
+    """
+    clean = shadow_entry.strip()
+    if ":" in clean:
+        parts = clean.split(":")
+        user = parts[0]
+        hash_part = parts[1]
+    else:
+        user = "unknown"
+        hash_part = clean
+
+    if not hash_part.startswith("$"):
+        return f"User: {user}\nPassword field does not contain a standard modular crypt hash (e.g. locked account or plain string): {hash_part}"
+
+    tokens = hash_part.split("$")
+    # tokens[0] is empty, tokens[1] is id, tokens[2] is salt/rounds, etc.
+    algo_id = tokens[1] if len(tokens) > 1 else ""
+
+    ALGO_NAMES = {
+        "1": "MD5-crypt ($1$)",
+        "2a": "Bcrypt / Blowfish ($2a$)",
+        "2b": "Bcrypt ($2b$)",
+        "2y": "Bcrypt ($2y$)",
+        "5": "SHA-256 crypt ($5$)",
+        "6": "SHA-512 crypt ($6$)",
+        "y": "Yescrypt ($y$ - modern Linux standard)",
+        "7": "Scrypt ($7$)",
+        "argon2id": "Argon2id ($argon2id$)",
+        "argon2i": "Argon2i ($argon2i$)",
+    }
+
+    algo_desc = ALGO_NAMES.get(algo_id, f"Custom / Unknown algorithm (${algo_id}$)")
+
+    lines = [
+        f"Linux /etc/shadow Analysis:",
+        f"  User Name  : {user}",
+        f"  Algorithm  : {algo_desc}",
+        f"  Raw Hash   : {hash_part[:60]}...",
+    ]
+
+    # Extract salt and rounds
+    if algo_id in ("5", "6"):
+        if "rounds=" in tokens[2]:
+            rounds = tokens[2].split("=")[1]
+            salt = tokens[3] if len(tokens) > 3 else ""
+            hash_val = tokens[4] if len(tokens) > 4 else ""
+            lines.append(f"  Rounds     : {rounds}")
+            lines.append(f"  Salt       : {salt}")
+            lines.append(f"  Hash Value : {hash_val[:32]}...")
+        else:
+            salt = tokens[2] if len(tokens) > 2 else ""
+            hash_val = tokens[3] if len(tokens) > 3 else ""
+            lines.append(f"  Salt       : {salt}")
+            lines.append(f"  Hash Value : {hash_val[:32]}...")
+
+    lines.append("\nCracking guidance (John the Ripper / Hashcat):")
+    if algo_id == "6":
+        lines.append("  Hashcat mode : -m 1800 (sha512crypt)")
+        lines.append("  John format  : sha512crypt")
+    elif algo_id == "5":
+        lines.append("  Hashcat mode : -m 7400 (sha256crypt)")
+    elif algo_id == "1":
+        lines.append("  Hashcat mode : -m 500 (md5crypt)")
+    elif algo_id.startswith("2"):
+        lines.append("  Hashcat mode : -m 3200 (bcrypt)")
+
+    return "\n".join(lines)
+
+
+@tool(category="forensics")
+def linux_history_audit(history_path_or_content: str) -> str:
+    """Audit Linux .bash_history or .zsh_history for leaked passwords, API keys, hidden artifacts, and sudo usage.
+
+    :param history_path_or_content: Path to history file or raw multiline history string
+    """
+    import os
+    import re
+
+    if os.path.exists(history_path_or_content):
+        content = open(history_path_or_content, "r", errors="ignore").read()
+    else:
+        content = history_path_or_content
+
+    lines = content.splitlines()
+    findings = []
+
+    SUSPICIOUS_PATTERNS = [
+        (r"(?:mysql|psql|ssh|curl|wget|sudo)\s+.*-p[^\s]+", "Command with inline password flag (-p)"),
+        (r"export\s+[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|AUTH)=[^\s]+", "Environment variable secret export"),
+        (r"echo\s+['\"][A-Za-z0-9+/=]{16,}['\"]\s*\|\s*base64\s+-d", "Decoded base64 payload"),
+        (r"flag\{[^}]+\}", "Flag string in command history"),
+        (r"chmod\s+[4-7]?[0-7]{3}\s+[^\s]+", "File permissions alteration"),
+        (r"(?:scp|rsync|nc|ncat|netcat)\s+.*", "File transfer / network activity"),
+        (r"python[23]?\s+-c\s+['\"].*['\"]", "Inline Python script execution"),
+        (r"\/tmp\/[^\s]+", "Execution of /tmp directory artifact"),
+    ]
+
+    for idx, line in enumerate(lines, 1):
+        clean_l = line.strip()
+        # zsh history timestamp format : <timestamp>:<duration>;<command>
+        if clean_l.startswith(":") and ";" in clean_l:
+            clean_l = clean_l.split(";", 1)[1]
+
+        for pattern, desc in SUSPICIOUS_PATTERNS:
+            if re.search(pattern, clean_l, re.IGNORECASE):
+                findings.append(f"  [Line {idx}] {desc}:\n    → `{clean_l}`")
+                break
+
+    if not findings:
+        return f"Audited {len(lines)} history line(s). No high-priority sensitive keywords found."
+
+    return f"Linux History Audit ({len(findings)} noteworthy event(s) across {len(lines)} lines):\n\n" + "\n\n".join(findings[:30])
+
+
+@tool(category="forensics")
+def linux_cron_audit(cron_content: str) -> str:
+    """Audit Linux /etc/crontab or crontab files, explaining schedule and flagging wildcard or security risks.
+
+    :param cron_content: Content of crontab or path to file
+    """
+    import os
+    if os.path.exists(cron_content):
+        content = open(cron_content, "r", errors="ignore").read()
+    else:
+        content = cron_content
+
+    lines = content.splitlines()
+    entries = []
+
+    for idx, l in enumerate(lines, 1):
+        l_str = l.strip()
+        if not l_str or l_str.startswith("#"):
+            continue
+
+        parts = l_str.split()
+        if len(parts) >= 5:
+            # Check system crontab (minute hour dom month dow user command) vs user crontab (minute hour dom month dow command)
+            sched = " ".join(parts[:5])
+            rest = parts[5:]
+
+            wildcard_warning = ""
+            cmd_full = " ".join(rest)
+            if "tar " in cmd_full and "*" in cmd_full:
+                wildcard_warning = " ⚠️ WILDCARD INJECTION HAZARD (tar * privilege escalation)"
+            elif "rsync " in cmd_full and "*" in cmd_full:
+                wildcard_warning = " ⚠️ WILDCARD INJECTION HAZARD (rsync * privilege escalation)"
+            elif "/tmp/" in cmd_full:
+                wildcard_warning = " ⚠️ SCRIPT RUNS FROM /tmp (writable directory hazard)"
+
+            entries.append(
+                f"  Entry #{len(entries)+1} (Line {idx}):\n"
+                f"    Schedule: `{sched}`\n"
+                f"    Command : `{cmd_full}`{wildcard_warning}"
+            )
+
+    if not entries:
+        return "No active cron jobs found in content."
+
+    return f"Linux Crontab Audit ({len(entries)} job(s)):\n\n" + "\n\n".join(entries)
+
+
+@tool(category="forensics")
+def linux_wtmp_utmp_parse(path: str, max_records: int = 50) -> str:
+    """Parse Linux binary login accounting records (/var/log/wtmp, /var/run/utmp, btmp).
+
+    :param path: Path to the wtmp, utmp, or btmp file
+    :param max_records: Max records to return (default 50)
+    """
+    import os
+    import struct
+    import time
+
+    if not os.path.exists(path):
+        return f"ERROR: File not found: {path}"
+
+    RECORD_SIZE = 384  # Standard 64-bit Linux utmp record size
+    data = open(path, "rb").read()
+    if len(data) < RECORD_SIZE:
+        return f"File size too small for standard Linux utmp/wtmp record ({len(data)} bytes)."
+
+    TYPE_NAMES = {
+        0: "EMPTY", 1: "RUN_LVL", 2: "BOOT_TIME", 3: "NEW_TIME", 4: "OLD_TIME",
+        5: "INIT_PROCESS", 6: "LOGIN_PROCESS", 7: "USER_PROCESS", 8: "DEAD_PROCESS", 9: "ACCOUNTING"
+    }
+
+    records = []
+    for offset in range(0, len(data) - RECORD_SIZE + 1, RECORD_SIZE):
+        chunk = data[offset:offset+RECORD_SIZE]
+        ut_type, ut_pid = struct.unpack("<hi", chunk[:6])
+        ut_line = chunk[8:40].decode("latin-1", errors="ignore").rstrip("\x00")
+        ut_id = chunk[40:44].decode("latin-1", errors="ignore").rstrip("\x00")
+        ut_user = chunk[44:76].decode("latin-1", errors="ignore").rstrip("\x00")
+        ut_host = chunk[76:332].decode("latin-1", errors="ignore").rstrip("\x00")
+        tv_sec, tv_usec = struct.unpack("<ii", chunk[336:344])
+
+        if ut_user or ut_host or ut_type in (2, 7):
+            t_str = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(tv_sec)) if tv_sec > 0 else "N/A"
+            type_str = TYPE_NAMES.get(ut_type, f"Type_{ut_type}")
+            records.append(f"  [{t_str} UTC] {type_str:<12} | User: {ut_user:<12} | Line: {ut_line:<8} | Host/IP: {ut_host or 'local'}")
+
+    if not records:
+        return "No valid login records decoded from file."
+
+    return f"Parsed {len(records)} Linux Login Record(s) from {path}:\n\n" + "\n".join(records[-max_records:])
+
+
+@tool(category="forensics")
+def linux_core_dump_strings(core_path: str, min_len: int = 4) -> str:
+    """Analyze a Linux ELF core dump file (core.<pid>) to extract heap/stack memory strings and flag candidates.
+
+    :param core_path: Path to the core dump file
+    :param min_len: Minimum string length (default 4)
+    """
+    import os
+    import re
+
+    if not os.path.exists(core_path):
+        return f"ERROR: File not found: {core_path}"
+
+    data = open(core_path, "rb").read()
+    if not data.startswith(b"\x7fELF"):
+        return f"ERROR: File does not appear to be an ELF core dump (magic: {data[:4].hex()})"
+
+    # Extract printable ASCII and UTF-8 strings
+    pattern = rb"[\x20-\x7e]{" + str(min_len).encode() + rb",}"
+    matches = [m.group(0).decode("latin-1", errors="ignore") for m in re.finditer(pattern, data)]
+
+    flags = [s for s in matches if "flag{" in s.lower() or "ctf{" in s.lower() or "secret" in s.lower()]
+
+    lines = [
+        f"Linux Core Dump Analysis: {core_path} ({len(data)} bytes)",
+        f"Total Strings Extracted : {len(matches)}",
+        f"High Priority Candidates: {len(flags)}",
+    ]
+    if flags:
+        lines.append("\n🚩 Flag / Secret Matches in Memory:")
+        for fl in dict.fromkeys(flags)[:20]:
+            lines.append(f"  → {fl}")
+
+    return "\n".join(lines)
+
+
+@tool(category="forensics")
+def gzip_timestamp_extract(path: str) -> str:
+    """Extract creation timestamp, original filename, extra flags, and OS identifier from GZIP (.gz) header.
+
+    :param path: Path to the .gz file
+    """
+    import os
+    import struct
+    import time
+
+    if not os.path.exists(path):
+        return f"ERROR: File not found: {path}"
+
+    data = open(path, "rb").read(1024)
+    if len(data) < 10 or data[:2] != b"\x1f\x8b":
+        return "ERROR: File is not a valid GZIP archive (magic mismatch)."
+
+    cm = data[2]
+    flags = data[3]
+    mtime, xfl, os_id = struct.unpack("<IBB", data[4:10])
+
+    OS_NAMES = {
+        0: "FAT (MS-DOS/OS/2/NT)", 1: "Amiga", 2: "VMS", 3: "Unix / Linux",
+        4: "VM/CMS", 5: "Atari TOS", 6: "HPFS (OS/2)", 7: "Macintosh",
+        8: "Z-System", 9: "CP/M", 10: "TOPS-20", 11: "NTFS", 12: "QDOS", 13: "Acorn RISCOS", 255: "Unknown"
+    }
+
+    t_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(mtime)) if mtime > 0 else "Timestamp not set"
+
+    lines = [
+        f"GZIP Archive Header Analysis for {path}:",
+        f"  Compression Method : Deflate ({cm})" if cm == 8 else f"  Compression Method : {cm}",
+        f"  Header Timestamp   : {mtime} ({t_str})",
+        f"  Operating System   : {OS_NAMES.get(os_id, f'OS_{os_id}')}",
+        f"  Header Flags (0x{flags:02x}) : "
+    ]
+
+    idx = 10
+    if flags & 0x04:  # FEXTRA
+        lines.append("    • FEXTRA present")
+        if len(data) >= idx + 2:
+            xlen = struct.unpack("<H", data[idx:idx+2])[0]
+            idx += 2 + xlen
+    if flags & 0x08:  # FNAME (original filename)
+        null_idx = data.find(b"\x00", idx)
+        if null_idx != -1:
+            orig_name = data[idx:null_idx].decode("latin-1", errors="replace")
+            lines.append(f"    • Original Filename (FNAME): '{orig_name}' 📁")
+            idx = null_idx + 1
+    if flags & 0x10:  # FCOMMENT
+        null_idx = data.find(b"\x00", idx)
+        if null_idx != -1:
+            comment = data[idx:null_idx].decode("latin-1", errors="replace")
+            lines.append(f"    • Comment (FCOMMENT): '{comment}' 💬")
+    if flags & 0x02:  # FHCRC
+        lines.append("    • Header CRC16 present")
+
+    return "\n".join(lines)
+
+
+@tool(category="forensics")
+def tar_header_analyze(path: str) -> str:
+    """Analyze POSIX USTAR / GNU tar archive 512-byte header blocks, listing permissions, timestamps, and files.
+
+    :param path: Path to the .tar file
+    """
+    import os
+    import struct
+    import time
+
+    if not os.path.exists(path):
+        return f"ERROR: File not found: {path}"
+
+    data = open(path, "rb").read()
+    if len(data) < 512:
+        return "ERROR: File size smaller than 512-byte tar block."
+
+    TYPE_MAP = {
+        b"0": "Regular file", b"\x00": "Regular file", b"1": "Hard link",
+        b"2": "Symbolic link", b"3": "Char device", b"4": "Block device",
+        b"5": "Directory", b"6": "FIFO / pipe", b"7": "Contiguous file",
+        b"g": "PAX global header", b"x": "PAX extended header"
+    }
+
+    entries = []
+    offset = 0
+    while offset + 512 <= len(data):
+        block = data[offset:offset+512]
+        if block == b"\x00" * 512:
+            break
+
+        name = block[:100].decode("latin-1", errors="replace").rstrip("\x00")
+        mode_str = block[100:108].decode("latin-1", errors="ignore").strip("\x00 ")
+        uid_str = block[108:116].decode("latin-1", errors="ignore").strip("\x00 ")
+        gid_str = block[116:124].decode("latin-1", errors="ignore").strip("\x00 ")
+        size_str = block[124:136].decode("latin-1", errors="ignore").strip("\x00 ")
+        mtime_str = block[136:148].decode("latin-1", errors="ignore").strip("\x00 ")
+        typeflag = block[156:157]
+        magic = block[257:263].decode("latin-1", errors="ignore").rstrip("\x00")
+
+        try:
+            size = int(size_str, 8) if size_str else 0
+        except ValueError:
+            size = 0
+
+        try:
+            mtime = int(mtime_str, 8) if mtime_str else 0
+            t_formatted = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(mtime))
+        except ValueError:
+            t_formatted = "N/A"
+
+        ftype = TYPE_MAP.get(typeflag, f"Type_{typeflag}")
+        entries.append(
+            f"  • {name:<32} | {ftype:<14} | Size: {size:<8} bytes | Mtime: {t_formatted} | Mode: 0{mode_str}"
+        )
+
+        # Advance by header + aligned file blocks
+        file_blocks = (size + 511) // 512
+        offset += 512 * (1 + file_blocks)
+
+    if not entries:
+        return "No valid tar headers parsed from file."
+
+    return f"TAR Archive Header Inspection ({len(entries)} entry/entries):\n\n" + "\n".join(entries[:50])
+
+
+@tool(category="forensics")
+def png_ancillary_chunks(path: str) -> str:
+    """Inspect all ancillary PNG chunks (tEXt, zTXt, iTXt, pHYs, tIME, eXIf, bKGD, etc.) for hidden forensic data.
+
+    :param path: Path to the PNG image file
+    """
+    import os
+    import struct
+    import zlib
+
+    if not os.path.exists(path):
+        return f"ERROR: File not found: {path}"
+
+    data = open(path, "rb").read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "ERROR: File is not a valid PNG image."
+
+    chunks = []
+    offset = 8
+    while offset + 8 <= len(data):
+        length = struct.unpack(">I", data[offset:offset+4])[0]
+        ctype = data[offset+4:offset+8].decode("latin-1", errors="replace")
+        cdata = data[offset+8:offset+8+length]
+        crc = struct.unpack(">I", data[offset+8+length:offset+12+length])[0] if offset+12+length <= len(data) else 0
+
+        info = f"  Chunk [{ctype}] ({length} bytes) @ offset 0x{offset:x}"
+
+        # Detailed payload parsing for text and metadata chunks
+        if ctype == "tEXt":
+            if b"\x00" in cdata:
+                k, v = cdata.split(b"\x00", 1)
+                info += f" -> Keyword: '{k.decode('latin-1', 'replace')}' | Text: '{v.decode('latin-1', 'replace')}'"
+        elif ctype == "zTXt":
+            if b"\x00" in cdata:
+                k, rest = cdata.split(b"\x00", 1)
+                if len(rest) > 1:
+                    cm = rest[0]
+                    try:
+                        decomp = zlib.decompress(rest[1:]).decode("latin-1", "replace")
+                        info += f" -> Keyword: '{k.decode('latin-1', 'replace')}' | Decompressed zTXt: '{decomp}'"
+                    except Exception:
+                        pass
+        elif ctype == "tIME" and length == 7:
+            y, m, d, h, mi, s = struct.unpack(">HBBBBB", cdata)
+            info += f" -> Timestamp: {y}-{m:02d}-{d:02d} {h:02d}:{mi:02d}:{s:02d} UTC"
+
+        chunks.append(info)
+        offset += 12 + length
+
+    return f"PNG Chunks Analysis for {path} ({len(chunks)} chunks):\n\n" + "\n".join(chunks)
+
+
+@tool(category="forensics")
+def wav_header_analyze(path: str) -> str:
+    """Analyze RIFF WAV audio container header chunks (fmt, data, cue, LIST, INFO) and format properties.
+
+    :param path: Path to the WAV audio file
+    """
+    import os
+    import struct
+
+    if not os.path.exists(path):
+        return f"ERROR: File not found: {path}"
+
+    data = open(path, "rb").read(4096)
+    if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return "ERROR: File is not a valid RIFF/WAVE audio file."
+
+    riff_size = struct.unpack("<I", data[4:8])[0]
+    lines = [
+        f"RIFF/WAVE Audio Header Analysis: {path}",
+        f"  Total File Payload Size: {riff_size + 8} bytes",
+        f"\nChunks in Header:"
+    ]
+
+    offset = 12
+    while offset + 8 <= len(data):
+        chunk_id = data[offset:offset+4].decode("latin-1", errors="replace")
+        chunk_size = struct.unpack("<I", data[offset+4:offset+8])[0]
+        cdata = data[offset+8:offset+8+chunk_size]
+
+        info = f"  • Chunk '{chunk_id}' ({chunk_size} bytes) @ offset 0x{offset:x}"
+        if chunk_id == "fmt " and len(cdata) >= 16:
+            a_fmt, channels, s_rate, b_rate, block_align, bits_sample = struct.unpack("<HHIIHH", cdata[:16])
+            FMT_NAMES = {1: "PCM (Uncompressed)", 3: "IEEE Float", 6: "A-law", 7: "u-law"}
+            info += (
+                f"\n      Format      : {FMT_NAMES.get(a_fmt, f'Format_{a_fmt}')}\n"
+                f"      Channels    : {channels} ({'Mono' if channels == 1 else 'Stereo'})\n"
+                f"      Sample Rate : {s_rate} Hz\n"
+                f"      Bit Depth   : {bits_sample}-bit ({block_align} bytes/frame)"
+            )
+        elif chunk_id == "data":
+            info += f" -> Main audio sample buffer ({chunk_size} bytes)"
+
+        lines.append(info)
+        offset += 8 + ((chunk_size + 1) & ~1)  # 2-byte word aligned
+
+    return "\n".join(lines)

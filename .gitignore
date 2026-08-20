@@ -1,11 +1,34 @@
+# Local environments and secrets
 .venv/
+.env
+.env.*
+!.env.example
+.mcp.json
+
+# Python caches, test output, and coverage
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime state and generated CTF artifacts
 testdata/
 memory/
 writeups/
-testdata/carved/
-testdata/gif_frames/
+ctfkit/memory/projects/
+ctfkit/memory/runs/
+ctfkit/testdata/
+*.log
+*.tmp
+
+# Builds and editor/OS files
 build/
 dist/
 *.spec
+.DS_Store
+Thumbs.db
+.idea/

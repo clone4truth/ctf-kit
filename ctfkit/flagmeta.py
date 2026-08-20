@@ -34,7 +34,7 @@ for p in PLATFORMS:
         _patterns.append((p["name"], re.compile(re.escape(prefix) + r"[^}\n]{1,200}\}")))
 
 _GENERIC_BRACE = re.compile(r"([A-Za-z0-9_]{2,16})\{[^}\n]{6,200}\}")
-_FLAG_WORD = re.compile(r"flag[^\w]?[=:\-]?[^\w]?([A-Za-z0-9_\-+./=]{6,200})", re.IGNORECASE)
+_FLAG_WORD = re.compile(r"(?i)\bflag\s*(?:=|:|-)\s*([A-Za-z0-9_+./=-]{6,200})(?!\})")
 _HEX_NEAR_FLAG = re.compile(r"(?i)(flag.{0,300}?)([0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})")
 
 CATEGORY_KEYWORDS = {
@@ -88,7 +88,7 @@ def _flag_matches(text: str, platform: str | None = None) -> list[str]:
     for prefix in GENERIC_PREFIXES:
         out.extend(m.group(0) for m in re.finditer(re.escape(prefix) + r"[^}\n]{1,200}\}", text))
     out.extend(m.group(0) for m in _GENERIC_BRACE.finditer(text))
-    out.extend(m.group(0) for m in _FLAG_WORD.finditer(text))
+    out.extend(m.group(1) for m in _FLAG_WORD.finditer(text))
     for m in _HEX_NEAR_FLAG.finditer(text):
         out.append(m.group(2))
     return out
@@ -99,10 +99,59 @@ def extract_flags(text: str, platform: str | None = None) -> list[str]:
     seen = set()
     out = []
     for f in _flag_matches(text, platform):
+        prefix = f.split("{", 1)[0].lower() if "{" in f else ""
+        if _looks_like_code_candidate(f):
+            continue
+        if "{" in f and any(f in prior and f != prior for prior in out):
+            continue
         if f not in seen:
             seen.add(f)
             out.append(f)
     return out
+
+
+_CODE_PREFIXES = {
+    "body", "html", "head", "style", "media", "keyframes", "map", "dict", "set",
+    "h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "div", "span", "main", "nav",
+    "section", "article", "header", "footer", "button", "input", "form", "table",
+    "visited", "link", "hover", "active", "focus", "before", "after", "root",
+}
+
+
+def _looks_like_code_candidate(value: str) -> bool:
+    if "{" not in value or not value.endswith("}"):
+        return False
+    prefix, inner = value.split("{", 1)
+    if prefix.lower() in _CODE_PREFIXES:
+        return True
+    # CSS declarations are a frequent false positive for the generic brace rule.
+    return bool(re.search(r"(?:^|;)\s*[a-zA-Z-]{2,24}\s*:\s*[^;}]+", inner[:-1]))
+
+
+def extract_flag_candidates(text: str, platform: str | None = None) -> list[dict]:
+    """Return ranked candidates with confidence and evidence instead of bare regex hits."""
+    candidates = []
+    seen = set()
+    known_prefixes = {prefix.rstrip("{").lower() for p in PLATFORMS for prefix in p["prefixes"]}
+    known_prefixes.update(prefix.rstrip("{").lower() for prefix in GENERIC_PREFIXES)
+    for value in _flag_matches(text, platform):
+        if value in seen:
+            continue
+        seen.add(value)
+        prefix = value.split("{", 1)[0].lower() if "{" in value else ""
+        if _looks_like_code_candidate(value):
+            continue
+        if "{" in value and any(value in item["value"] and value != item["value"] for item in candidates):
+            continue
+        if "{" in value and value.endswith("}"):
+            score = 0.98 if prefix in known_prefixes else 0.78
+            reason = "known flag prefix" if prefix in known_prefixes else "generic brace-shaped candidate"
+        elif re.fullmatch(r"[0-9a-fA-F]{32}|[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", value):
+            score, reason = 0.72, "digest adjacent to flag keyword"
+        else:
+            score, reason = 0.62, "value explicitly labelled as flag"
+        candidates.append({"value": value, "confidence": score, "reason": reason})
+    return sorted(candidates, key=lambda item: item["confidence"], reverse=True)
 
 
 def detect_flag(text: str, platform: str | None = None) -> str | None:
