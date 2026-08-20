@@ -119,8 +119,15 @@ _NO_CACHE = {
 }
 
 
-def tool(name: str | None = None, category: str = "misc"):
-    """Decorator: register a function as a CTF tool."""
+def tool(name: str | None = None, category: str = "misc", timeout: float = 30.0, retries: int = 0, parallel_safe: bool = True):
+    """Decorator: register a function as a CTF tool.
+
+    :param name: optional tool name override
+    :param category: tool category (encoding, crypto, stego, forensics, web, rev, pwn, osint, misc)
+    :param timeout: default timeout in seconds for this tool
+    :param retries: number of retries on failure (for idempotent tools)
+    :param parallel_safe: whether tool can run in parallel with others (no shared state)
+    """
 
     def deco(fn):
         key = name or fn.__name__
@@ -134,6 +141,9 @@ def tool(name: str | None = None, category: str = "misc"):
             "summary": summary,
             "doc": doc,
             "params": tool_params(fn),
+            "timeout": timeout,
+            "retries": retries,
+            "parallel_safe": parallel_safe,
         }
         return fn
 
@@ -141,7 +151,7 @@ def tool(name: str | None = None, category: str = "misc"):
 
 
 def run_tool(name: str, args: dict) -> str:
-    """Run a tool with start/end logging + error handling + execution tracking."""
+    """Run a tool with start/end logging + error handling + execution tracking + timeout/retry."""
     if name not in TOOLS:
         raise KeyError(f"Unknown tool: {name}")
     meta = TOOLS[name]
@@ -177,42 +187,61 @@ def run_tool(name: str, args: dict) -> str:
     _start = _time.monotonic()
     log.info("[%s] %s running: %s", meta["category"], name,
              ", ".join(f"{k}={str(v)[:60]}" for k, v in sig_args.items()))
-    try:
-        result = fn(**sig_args)
-        if not isinstance(result, str):
-            result = str(result)
-        if not result.startswith("ERROR") and name not in _NO_CACHE:
-            cache_put(name, sig_args, result)
-        log.info("[%s] %s done in %.2fs (%d chars)", meta["category"], name,
-                 _time.monotonic() - _start, len(result))
-        
-        duration = _time.monotonic() - _start
-        record_tool_execution(
-            tool_name=name,
-            success=not result.startswith("ERROR"),
-            args=sig_args,
-            duration=duration,
-            output_preview=result[:300],
-            context=meta.get("summary", name),
-        )
-        
-        return result
-    except Exception as ex:
-        log.error("[%s] %s FAILED after %.2fs: %s", meta["category"], name,
-                  _time.monotonic() - _start, ex)
-        error_msg = f"ERROR: {ex}\n{traceback.format_exc(limit=3)}"
-        
-        duration = _time.monotonic() - _start
-        record_tool_execution(
-            tool_name=name,
-            success=False,
-            args=sig_args,
-            duration=duration,
-            output_preview=error_msg[:300],
-            context=meta.get("summary", name),
-        )
-        
-        return error_msg
+    
+    # Get tool-specific timeout and retries
+    tool_timeout = meta.get("timeout", 30.0)
+    tool_retries = meta.get("retries", 0)
+    
+    last_error = None
+    for attempt in range(tool_retries + 1):
+        try:
+            # Run with timeout
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(fn, **sig_args)
+                result = future.result(timeout=tool_timeout)
+            
+            if not isinstance(result, str):
+                result = str(result)
+            if not result.startswith("ERROR") and name not in _NO_CACHE:
+                cache_put(name, sig_args, result)
+            log.info("[%s] %s done in %.2fs (%d chars)", meta["category"], name,
+                     _time.monotonic() - _start, len(result))
+            
+            duration = _time.monotonic() - _start
+            record_tool_execution(
+                tool_name=name,
+                success=not result.startswith("ERROR"),
+                args=sig_args,
+                duration=duration,
+                output_preview=result[:300],
+                context=meta.get("summary", name),
+            )
+            
+            return result
+        except concurrent.futures.TimeoutError:
+            last_error = f"Tool timeout after {tool_timeout}s"
+            log.warning("[%s] %s attempt %d/%d timed out", meta["category"], name, attempt + 1, tool_retries + 1)
+        except Exception as ex:
+            last_error = ex
+            log.warning("[%s] %s attempt %d/%d failed: %s", meta["category"], name, attempt + 1, tool_retries + 1, ex)
+    
+    # All retries exhausted
+    error_msg = f"ERROR: {last_error}\n{traceback.format_exc(limit=3)}"
+    log.error("[%s] %s FAILED after %.2fs: %s", meta["category"], name,
+              _time.monotonic() - _start, last_error)
+    
+    duration = _time.monotonic() - _start
+    record_tool_execution(
+        tool_name=name,
+        success=False,
+        args=sig_args,
+        duration=duration,
+        output_preview=error_msg[:300],
+        context=meta.get("summary", name),
+    )
+    
+    return error_msg
 
 
 def list_tools(category: str | None = None) -> list[dict]:

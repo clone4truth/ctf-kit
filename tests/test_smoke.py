@@ -156,7 +156,7 @@ TESTS = [
     ("external_rev", {"tool": "objdump", "args": "-d binary", "auto": False}),
     ("external_available", {}),
     # --- New tools batch: orchestrate / web / forensics / crypto / osint ---
-    ("chain_tools", {"steps": '[{"tool":"decode_all","data":"$data"},{"tool":"extract_flags_tool","text":"$prev"}]', "data": "ZmxhZ3tjaGFpbl90b29sfQ=="}),
+    ("chain_tools", {"steps": '[{"tool":"decode_all","args":{"data":"$data"}},{"tool":"extract_flags_tool","args":{"text":"$prev"}}]', "data": "ZmxhZ3tjaGFpbl90b29sfQ=="}),
     ("flask_session", {"session_cookie": "eyJ1c2VyIjoiYWRtaW4ifQ.1.abc", "secret": "SECRET", "action": "decode", "digest": "sha1"}),
     ("flask_session", {"session_cookie": "", "secret": "SECRET", "action": "forge", "payload_json": '{"user":"admin"}', "digest": "sha1"}),
     ("sqlite_reader", {"path": "testdata/flag.db", "table": ""}),

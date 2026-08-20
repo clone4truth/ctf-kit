@@ -4,6 +4,8 @@ Runs installed binaries via subprocess. Missing tools are auto-installed
 (winget / apt / brew / pip per platform) when auto=True, then re-checked.
 On Linux, tools without a specific installer fall back to `apt-get install -y <name>`.
 Output is truncated to keep MCP/API responses small; never invented results.
+
+SecLists wordlists: auto-downloaded to testdata/wordlists/ on first use.
 """
 
 import os
@@ -23,6 +25,56 @@ _INSTALL_TIMEOUT = 600
 
 PIP = sys.executable  # installs into the venv the server runs from
 _VENV_BIN = Path(sys.executable).parent
+
+# Wordlist directory
+WORDLIST_DIR = Path(__file__).resolve().parent.parent / "testdata" / "wordlists"
+SEC_LISTS_URL = "https://github.com/danielmiessler/SecLists/archive/refs/heads/master.zip"
+SEC_LISTS_DIR = WORDLIST_DIR / "SecLists-master"
+
+def _ensure_seclists():
+    """Download and extract SecLists if not present."""
+    WORDLIST_DIR.mkdir(parents=True, exist_ok=True)
+    if SEC_LISTS_DIR.exists():
+        return str(SEC_LISTS_DIR)
+    
+    import urllib.request
+    import zipfile
+    import tempfile
+    
+    log.info("[external] Downloading SecLists wordlists...")
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            urllib.request.urlretrieve(SEC_LISTS_URL, tmp.name)
+            log.info("[external] Extracting SecLists...")
+            with zipfile.ZipFile(tmp.name, 'r') as z:
+                z.extractall(WORDLIST_DIR)
+        os.unlink(tmp.name)
+        log.info(f"[external] SecLists ready at {SEC_LISTS_DIR}")
+        return str(SEC_LISTS_DIR)
+    except Exception as e:
+        log.warning(f"[external] SecLists download failed: {e}")
+        return str(WORDLIST_DIR)  # fallback
+
+def _get_default_wordlist(category: str) -> str:
+    """Get default wordlist path for a tool category."""
+    seclists = _ensure_seclists()
+    
+    # Common wordlist mappings
+    wordlists = {
+        "dir": os.path.join(seclists, "Discovery", "Web-Content", "raft-medium-directories.txt"),
+        "file": os.path.join(seclists, "Discovery", "Web-Content", "raft-medium-files.txt"),
+        "subdomain": os.path.join(seclists, "Discovery", "DNS", "subdomains-top1million-110000.txt"),
+        "password": os.path.join(seclists, "Passwords", "Common-Credentials", "10k-most-common.txt"),
+        "user": os.path.join(seclists, "Usernames", "Names", "names.txt"),
+        "generic": os.path.join(seclists, "Discovery", "Web-Content", "raft-medium-words.txt"),
+    }
+    
+    # Return appropriate wordlist or fallback to rockyou if available
+    rockyou = "/usr/share/wordlists/rockyou.txt"
+    if os.path.exists(rockyou):
+        wordlists["password"] = rockyou
+    
+    return wordlists.get(category, wordlists["generic"])
 
 # tool -> {platform: install command or None if no auto-installer known}
 INSTALL_CMD = {
@@ -75,6 +127,7 @@ INSTALL_CMD = {
     "wpscan": {"linux": "gem install wpscan", "darwin": "gem install wpscan"},
     "fierce": {"linux": f'"{PIP}" -m pip install --quiet fierce', "darwin": f'"{PIP}" -m pip install --quiet fierce'},
     "testssl.sh": {"linux": "apt-get install -y testssl.sh"},
+    "ghidra_headless": {"linux": "apt-get install -y ghidra", "darwin": "brew install --cask ghidra"},
     "commix": {"linux": "apt-get install -y commix"},
     "feroxbuster": {"linux": "apt-get install -y feroxbuster", "darwin": "brew install feroxbuster"},
     "rustscan": {"darwin": "brew install rustscan"},
@@ -214,7 +267,7 @@ ALLOWED = {
         "file", "readelf", "objdump", "nm", "strings", "gdb", "ltrace", "strace",
         "r2", "angr", "retdec", "upx", "patchelf", "one_gadget", "rp++",
         "ROPgadget", "ropper", "checksec", "qemu", "pwntools", "nc", "socat",
-        "msfvenom", "searchsploit",
+        "msfvenom", "searchsploit", "ghidra_headless",
     ],
     "pwn": [
         "checksec", "ROPgadget", "ropper", "one_gadget", "rp++", "gdb", "pwntools",
@@ -344,6 +397,7 @@ DEFAULT_ARGS = {
     "ropper": "--file {file}",
     "checksec": "--file {file}",
     "qemu": "{file}",
+    "ghidra_headless": "analyzeHeadless {outdir}/ghidra_proj {outdir}/ghidra_proj -import {file} -postScript {outdir}/analysis.py",
     # --- pwn ---
     "pwntools": "checksec {file}",
     "nc": "-vz {host} {port}",
@@ -560,7 +614,8 @@ def _run_proc(name: str, label: str, key: str, proc, args: str, timeout: int, st
              extra={"progress_done": key})
     out = "\n".join(out_lines)[-_MAX_OUT:]
     if proc.returncode != 0 and err_lines:
-        out += f"\n[stderr] {'\n'.join(err_lines)[-1000:]}"
+        err_tail = "\n".join(err_lines)[-1000:]
+        out += f"\n[stderr] {err_tail}"
     return out.strip() or f"(exit {proc.returncode}, no output)"
 
 
@@ -627,7 +682,7 @@ def external_crypto(tool: str, args: str = "", timeout: int = 120, auto: bool = 
 
 @tool(category="rev")
 def external_rev(tool: str, args: str = "", timeout: int = 120, auto: bool = True) -> str:
-    """Run an external rev tool: objdump, readelf, r2, gdb, ROPgadget, upx, checksec, ... Missing tool is auto-installed when auto=True.
+    """Run an external rev tool: objdump, readelf, r2, gdb, ROPgadget, upx, checksec, ghidra_headless, ... Missing tool is auto-installed when auto=True.
     :param args: args
     :param auto: auto
     :param timeout: timeout in seconds
@@ -645,3 +700,21 @@ def external_available() -> str:
             f"{n} [INSTALLED]" if _find_exe(n) else f"{n} [missing - auto-installable: {bool(INSTALL_CMD.get(n, {}).get(sys.platform))}]"
             for n in sorted(names)))
     return "\n".join(lines)
+
+
+@tool(category="misc")
+def wordlist_path(category: str = "generic") -> str:
+    """Get a default wordlist path for the given category (auto-downloads SecLists if missing).
+
+    Categories: dir, file, subdomain, password, user, generic
+    :param category: wordlist category
+    """
+    path = _get_default_wordlist(category)
+    if os.path.exists(path):
+        return f"WORDLIST: {path}"
+    # Try to download if missing
+    _ensure_seclists()
+    path = _get_default_wordlist(category)
+    if os.path.exists(path):
+        return f"WORDLIST: {path}"
+    return f"WORDLIST NOT FOUND: {path} (manual download required)"

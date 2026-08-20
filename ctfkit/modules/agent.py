@@ -2,6 +2,8 @@
 
 The agent learns from mistakes, avoids repeating failed techniques,
 and develops new strategies based on accumulated experience.
+
+Project-scoped state: agent can load/save state per-project (challenge directory).
 """
 
 import json
@@ -18,6 +20,9 @@ from .external import ALLOWED as EXTERNAL_TOOLS, DEFAULT_ARGS as EXTERNAL_ARGS, 
 
 AGENT_STATE_FILE = Path(__file__).resolve().parent.parent / "memory" / "agent_state.json"
 NEW_TOOL_COUNTER_FILE = Path(__file__).resolve().parent.parent / "memory" / "new_tool_counter.json"
+
+# Project-scoped agent state directory
+PROJECT_AGENT_DIR = Path(__file__).resolve().parent.parent / "memory" / "projects"
 
 
 def _load_new_tool_counter() -> int:
@@ -109,10 +114,19 @@ def scaffold_new_tool(name_hint: str, category: str, summary: str, params: str =
 
 
 class AgentState:
-    """Persistent state for the autonomous agent."""
+    """Persistent state for the autonomous agent.
 
-    def __init__(self):
-        self.state_path = AGENT_STATE_FILE
+    Supports project-scoped state isolation: pass project_id to keep
+    agent learning separate per challenge/directory.
+    """
+
+    def __init__(self, project_id: str = ""):
+        self.project_id = project_id
+        if project_id:
+            PROJECT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
+            self.state_path = PROJECT_AGENT_DIR / f"{project_id}.json"
+        else:
+            self.state_path = AGENT_STATE_FILE
         self.state = self._load()
 
     def _load(self) -> dict:
@@ -906,13 +920,16 @@ def _llm_pick(problem_statement: str, category: str, tried: list[str], last_outp
 
 
 @tool(category="misc")
-def autonomous_solve(problem_statement: str, max_iterations: int = 8) -> str:
+def autonomous_solve(problem_statement: str, max_iterations: int = 8, project_id: str = "") -> str:
     """Autonomous agent: plan -> recall -> iterative solve -> extract flag -> learn.
+
+    Pass project_id to scope agent state per-project (isolated learning per challenge).
     :param problem_statement: problem statement
     :param max_iterations: max iterations
+    :param project_id: project/challenge ID for scope isolation (default: global state)
     """
 
-    state = AgentState()
+    state = AgentState(project_id)
     state.increment_total_runs()
     start_time = time.time()
 
@@ -1234,8 +1251,18 @@ def get_agent_status() -> str:
 
 
 @tool(category="misc")
-def reset_agent_memory() -> str:
-    """Reset all agent learning memory (use with caution). Clears learned strategies and tool history."""
+def reset_agent_memory(project_id: str = "") -> str:
+    """Reset all agent learning memory (use with caution). Clears learned strategies and tool history.
+
+    Pass project_id to reset only that project's scoped state (global state untouched).
+    :param project_id: project ID to reset (default: global agent memory)
+    """
+    if project_id:
+        proj_file = PROJECT_AGENT_DIR / f"{project_id}.json"
+        if proj_file.exists():
+            proj_file.unlink()
+            return f"Agent memory for project '{project_id}' reset complete."
+        return f"No project state found for '{project_id}'."
     if AGENT_STATE_FILE.exists():
         AGENT_STATE_FILE.unlink()
     return "Agent memory reset complete. All learned strategies and tool history cleared."
