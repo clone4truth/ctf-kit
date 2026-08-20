@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CTF KIT — Main Server Engine
 
-Core backend server managing 90 security & CTF operations with REST API,
+Core backend server managing the registered CTF operations with REST API,
 Swagger UI documentation, and rich visual telemetry.
 
 Usage:
@@ -23,19 +23,10 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.align import Align
-from rich.text import Text
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-    TimeElapsedColumn
-)
 
 import ctfkit.modules  # noqa: F401
 from ctfkit import __version__
@@ -48,16 +39,6 @@ console = Console()
 STARTED_AT = time.monotonic()
 MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
-BANNER = """[bold cyan]
- ██████╗████████╗███████╗    ██╗  ██╗██╗████████╗
-██╔════╝╚══██╔══╝██╔════╝    ██║ ██╔╝██║╚══██╔══╝
-██║        ██║   █████╗      █████╔╝ ██║   ██║   
-██║        ██║   ██╔══╝      ██╔═██╗ ██║   ██║   
-╚██████╗   ██║   ██║         ██║  ██╗██║   ██║   
- ╚═════╝   ╚═╝   ╚═╝         ╚═╝  ╚═╝╚═╝   ╚═╝   
-[/bold cyan][bold green]  ⚡ AI-POWERED CTF & SECURITY ENGINE ({len(TOOLS)} TOOLS)[/bold green]
-"""
-
 CAT_ICONS = {
     "crypto": "🔐",
     "encoding": "🔤",
@@ -69,6 +50,30 @@ CAT_ICONS = {
     "osint": "🛰️",
     "misc": "🎯"
 }
+
+EVENT_STYLES = {
+    "start": ("RUN", "cyan", "▶"),
+    "success": ("DONE", "green", "✓"),
+    "no_finding": ("EMPTY", "yellow", "◇"),
+    "unavailable": ("SKIP", "yellow", "○"),
+    "blocked": ("BLOCK", "magenta", "◆"),
+    "invalid_input": ("INPUT", "yellow", "!"),
+    "timeout": ("TIME", "red", "◷"),
+    "error": ("FAIL", "red", "×"),
+}
+
+
+def print_event(state: str, name: str, category: str,
+                elapsed_ms: float | None = None, detail: str = "") -> None:
+    """Render one compact and consistent terminal event."""
+    label, color, symbol = EVENT_STYLES.get(state, EVENT_STYLES["error"])
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    duration = f" [dim]{elapsed_ms:,.1f} ms[/dim]" if elapsed_ms is not None else ""
+    suffix = f"  [dim]│ {detail}[/dim]" if detail else ""
+    console.print(
+        f"[dim]{timestamp}[/dim]  [{color}]{symbol} {label:<5}[/{color}]  "
+        f"[bold]{name}[/bold]  [dim]{category}[/dim]{duration}{suffix}"
+    )
 
 app = FastAPI(
     title="CTF Kit — AI Security & CTF Engine",
@@ -197,27 +202,19 @@ async def execute_request(payload: dict) -> dict:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
 
     start = time.monotonic()
-    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     tool_meta = TOOLS[name]
     cat = tool_meta.get("category", "tool")
-    icon = CAT_ICONS.get(cat, "⚡")
-
-    console.print(f"[dim]{timestamp}[/dim] [bold cyan]▶ RUNNING[/bold cyan] {icon} [bold white]{name}[/bold white] [dim]({cat})[/dim]")
+    print_event("start", name, cat)
 
     try:
         result = await asyncio.get_running_loop().run_in_executor(None, execute_registered_tool, name, args)
         elapsed = (time.monotonic() - start) * 1000
-        is_error = not result["ok"]
-        
-        if is_error:
-            console.print(f"[dim]{timestamp}[/dim] [bold red]✖ FAILED[/bold red]  {icon} [bold white]{name}[/bold white] [red]({elapsed:.1f}ms)[/red]")
-        else:
-            console.print(f"[dim]{timestamp}[/dim] [bold green]✔ FINISHED[/bold green] {icon} [bold white]{name}[/bold white] [green]({elapsed:.1f}ms)[/green]")
+        print_event(result.get("status", "error"), name, cat, elapsed)
 
         return {**result, "name": name, "result": result["text"], "elapsed_ms": round(elapsed, 2)}
     except Exception as ex:
         elapsed = (time.monotonic() - start) * 1000
-        console.print(f"[dim]{timestamp}[/dim] [bold red]✖ EXCEPTION[/bold red] {icon} [bold white]{name}[/bold white]: {ex}")
+        print_event("error", name, cat, elapsed, str(ex))
         return {
             "ok": False,
             "name": name,
@@ -303,8 +300,7 @@ async def upload_challenge_file(file: UploadFile = File(...)) -> dict:
         f.write(content)
     rel_path = f"testdata/uploads/{stored_name}"
     
-    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-    console.print(f"[dim]{timestamp}[/dim] [bold magenta]📦 UPLOADED[/bold magenta] [bold white]{clean_name}[/bold white] [dim]({len(content)} bytes -> {rel_path})[/dim]")
+    print_event("success", clean_name, "upload", detail=f"{len(content):,} bytes → {rel_path}")
     
     return {
         "ok": True,
@@ -315,69 +311,46 @@ async def upload_challenge_file(file: UploadFile = File(...)) -> dict:
     }
 
 
-def animate_initialization():
-    """Display slick progress bar and category loading animation on startup."""
-    console.print(Align.center(BANNER))
-    console.print("")
-
-    categories = list(CATEGORIES.keys())
-    
-    with Progress(
-        SpinnerColumn("dots12", style="bold cyan"),
-        TextColumn("[bold cyan]{task.description}"),
-        BarColumn(bar_width=32, style="grey37", complete_style="bold green"),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True
-    ) as progress:
-        task = progress.add_task("[bold cyan]Initializing CTF Kit Engine...", total=len(categories) + 1)
-        
-        for cat in categories:
-            icon = CAT_ICONS.get(cat, "•")
-            label = CATEGORIES.get(cat, cat.upper())
-            tools_in_cat = [t for t in TOOLS.values() if t["category"] == cat]
-            progress.update(task, description=f"Loading {icon} {label} ({len(tools_in_cat)} tools)...", advance=1)
-            time.sleep(0.04)
-            
-        progress.update(task, description="[bold green]Readying JSON-RPC MCP Bridge...", advance=1)
-        time.sleep(0.05)
-
-
 def print_server_dashboard(host: str, port: int):
-    """Render modern cyberpunk server status dashboard."""
-    # Summary Grid
-    grid = Table.grid(expand=True, padding=(0, 2))
-    grid.add_column(ratio=1)
-    grid.add_column(ratio=1)
+    """Render a compact startup dashboard without fake loading delays."""
+    base = f"http://{host}:{port}"
 
-    # Server Info Table
-    info_table = Table(show_header=False, box=None, padding=(0, 1))
-    info_table.add_row("[bold cyan]API Server URL:[/bold cyan]", f"[bold green]http://{host}:{port}[/bold green]")
-    info_table.add_row("[bold cyan]Interactive Docs:[/bold cyan]", f"[bold yellow]http://{host}:{port}/docs[/bold yellow]")
-    info_table.add_row("[bold cyan]Health Telemetry:[/bold cyan]", f"[bold cyan]http://{host}:{port}/health[/bold cyan]")
-    info_table.add_row("[bold cyan]MCP Protocol:[/bold cyan]", "[bold white]mcp_server.py (stdio)[/bold white]")
-
-    # Category Breakdown Table
-    cat_table = Table(show_header=False, box=None, padding=(0, 1))
-    for cat, label in list(CATEGORIES.items())[:5]:
-        icon = CAT_ICONS.get(cat, "•")
-        count = sum(1 for t in TOOLS.values() if t["category"] == cat)
-        cat_table.add_row(f"{icon} [bold white]{label}[/bold white]", f"[bold green]{count} tools[/bold green]")
-
-    grid.add_row(
-        Panel(info_table, title="[bold cyan]⚡ SERVER STATUS[/bold cyan]", border_style="cyan"),
-        Panel(cat_table, title="[bold green]📦 MODULE TELEMETRY[/bold green]", border_style="green")
+    header = Table.grid(expand=True)
+    header.add_column(justify="left")
+    header.add_column(justify="right")
+    header.add_row(
+        "[bold cyan]╔═╗╔╦╗╔═╗  ╦╔═╦╔╦╗[/bold cyan]\n"
+        "[bold cyan]║   ║ ╠╣   ╠╩╗║ ║ [/bold cyan]\n"
+        "[bold cyan]╚═╝ ╩ ╚    ╩ ╩╩ ╩ [/bold cyan]",
+        f"[green]● ONLINE[/green]\n[dim]version {__version__}[/dim]",
     )
+    header.add_row(
+        "[dim]Autonomous security workspace[/dim]",
+        f"[bold]{len(TOOLS)}[/bold] [dim]tools  •  {len(CATEGORIES)} categories[/dim]",
+    )
+    console.print(Panel(header, border_style="cyan", box=box.ROUNDED, padding=(0, 1)))
 
-    console.print(grid)
-    console.print(Panel(
-        f"[bold green]✔ ENGINE ONLINE:[/bold green] [bold white]{len(TOOLS)} Tools Active[/bold white] | "
-        f"[bold yellow]Listening on http://{host}:{port}[/bold yellow] | "
-        f"[dim]Press Ctrl+C to Stop[/dim]",
-        border_style="bright_blue"
-    ))
-    console.print("")
+    endpoints = Table(box=None, show_header=False, padding=(0, 2), expand=True)
+    endpoints.add_column(style="dim", width=10)
+    endpoints.add_column(style="cyan")
+    endpoints.add_row("API", base)
+    endpoints.add_row("Docs", f"{base}/docs")
+    endpoints.add_row("Health", f"{base}/health")
+    endpoints.add_row("Security", "Bearer token" if API_TOKEN else "Localhost")
+
+    categories = Table.grid(expand=True, padding=(0, 2))
+    for _ in range(3):
+        categories.add_column(ratio=1)
+    cells = []
+    for cat in CATEGORIES:
+        count = sum(1 for item in TOOLS.values() if item["category"] == cat)
+        cells.append(f"{CAT_ICONS.get(cat, '•')} [dim]{cat:<11}[/dim] [bold green]{count:>3}[/bold green]")
+    for index in range(0, len(cells), 3):
+        categories.add_row(*cells[index:index + 3])
+
+    console.print(Panel(endpoints, title="[bold]Endpoints[/bold]", border_style="grey37", box=box.ROUNDED))
+    console.print(Panel(categories, title="[bold]Registry[/bold]", border_style="grey37", box=box.ROUNDED))
+    console.print("[dim]Tool activity[/dim]  [grey37]────────────────────────────────────────[/grey37]")
 
 
 def main():
@@ -389,7 +362,6 @@ def main():
     if not is_loopback_host(args.host) and not API_TOKEN:
         parser.error("CTFKIT_API_TOKEN is required when binding REST to a non-loopback host")
 
-    animate_initialization()
     print_server_dashboard(args.host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 

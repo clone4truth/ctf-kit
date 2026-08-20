@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from ..flagmeta import detect_ctf, detect_flag, extract_flags, suggested_tools
+from ..logging import log
 from ..registry import tool, TOOLS
 
 ROOT = Path(__file__).resolve().parent.parent.parent

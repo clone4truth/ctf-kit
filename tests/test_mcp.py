@@ -29,6 +29,7 @@ async def main():
         sys.executable, mcp_script,
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
+        env={**os.environ, "CTFKIT_MCP_PROFILE": "full"},
         cwd=REPO_ROOT)
     lines = []
 

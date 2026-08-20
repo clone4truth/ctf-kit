@@ -3,10 +3,10 @@ Usage:  python scripts/build.py            -> builds both servers
         python scripts/build.py mcp        -> MCP server only
         python scripts/build.py api        -> API server only
 Requires: pip install pyinstaller
-Output: dist/ctfkit_api.exe, dist/ctfkit_mcp.exe
+Output: dist/ctfkit_api[.exe], dist/ctfkit_mcp[.exe]
 """
 
-import shutil
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -15,9 +15,11 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def build(target: str, name: str):
-    out = ROOT / "dist" / f"{name}.exe"
-    if shutil.which("pyinstaller") is None:
-        print("ERROR: pyinstaller not installed. pip install pyinstaller")
+    suffix = ".exe" if sys.platform == "win32" else ""
+    out = ROOT / "dist" / f"{name}{suffix}"
+    if importlib.util.find_spec("PyInstaller") is None:
+        print("ERROR: pyinstaller not installed in this Python environment. "
+              "Install requirements-dev.txt first.")
         sys.exit(1)
     sep = ";" if sys.platform == "win32" else ":"
     subprocess.run([

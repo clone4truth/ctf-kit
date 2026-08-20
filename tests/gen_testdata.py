@@ -3,6 +3,8 @@ import math
 import os
 import random
 import struct
+import tarfile
+import io
 import zlib
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -60,6 +62,19 @@ pkt = (
 )
 pcap += struct.pack("<IIII", 0, 0, len(pkt), len(pkt)) + pkt
 open(os.path.join(TESTDATA_DIR, "test.pcap"), "wb").write(bytes(pcap))
+
+# Repeating-XOR binary used by the advanced reverse-engineering benchmark.
+xor_plain = b"noise::flag{xor_binary_recovered}::end"
+xor_key = b"K3Y"
+xor_blob = bytes(byte ^ xor_key[i % len(xor_key)] for i, byte in enumerate(xor_plain))
+open(os.path.join(TESTDATA_DIR, "xor_flag.bin"), "wb").write(b"\x00\xffCTF" + xor_blob)
+
+# Deterministic TAR metadata fixture (the analyzer intentionally inspects headers).
+with tarfile.open(os.path.join(TESTDATA_DIR, "evidence.tar"), "w") as archive:
+    content = b"flag{tar_evidence_recovered}\n"
+    entry = tarfile.TarInfo("evidence/flag{tar_header_found}.txt")
+    entry.size, entry.mode, entry.mtime = len(content), 0o640, 1_700_000_000
+    archive.addfile(entry, io.BytesIO(content))
 
 # dummy x86-64 ELF with PT_GNU_STACK (NX), pop rdi; ret gadget
 elf_header = struct.pack(
@@ -119,6 +134,8 @@ open(os.path.join(TESTDATA_DIR, "pseudo.zip"), "wb").write(zip_bytes)
 # SQLite database with a flag
 import sqlite3
 db_file = os.path.join(TESTDATA_DIR, "flag.db")
+if os.path.exists(db_file):
+    os.remove(db_file)
 conn = sqlite3.connect(db_file)
 conn.execute("CREATE TABLE users (id INTEGER, username TEXT, secret TEXT)")
 conn.execute("INSERT INTO users VALUES (1, 'admin', 'flag{sqlite_reader_found}')")

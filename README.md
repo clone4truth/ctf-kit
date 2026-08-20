@@ -106,21 +106,15 @@ pip install -r requirements.txt
 ### 4. Validate the installation
 
 ```bash
-# 1. Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
+# Generate synthetic test data (PNG, WAV, PCAP, ELF, PE)
 python tests/gen_testdata.py
 
-# 2. Run 117 configured smoke scenarios
-python tests/test_smoke.py
-
-# 3. Verify MCP stdio JSON-RPC handshake
-python tests/test_mcp.py
-
-# 4. Run deterministic flag-recovery evaluation
-python scripts/eval_core.py
-
-# 5. Run unit and security regression tests
-python -m pytest -q
+# Run compile, unit/REST, smoke, MCP, core, and advanced checks
+python scripts/verify.py
 ```
+
+Install `requirements-dev.txt` and add `--build` to also verify both standalone
+executables: `python scripts/verify.py --build`.
 
 ## Run CTF KIT
 
@@ -184,12 +178,28 @@ path on Windows):
       "command": "/absolute/path/to/ctf-kit/.venv/bin/python",
       "args": ["/absolute/path/to/ctf-kit/mcp_server.py"],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "CTFKIT_MCP_PROFILE": "simple"
       }
     }
   }
 }
 ```
+
+### Simple MCP usage
+
+The recommended `simple` profile exposes a compact workflow surface plus two
+gateway tools while retaining access to the complete registry:
+
+1. Call `detect_challenge` or `plan_challenge` with the challenge statement.
+2. Call `find_ctf_tools` when you need a specific technique or parameter schema.
+3. Call `run_ctf_tool` with the selected name and arguments.
+4. Call `extract_flags_tool`, then `remember_challenge` after verification.
+
+This avoids sending 210 schemas to the AI client on every tool-list refresh.
+Power users can set `CTFKIT_MCP_PROFILE=full` to expose every tool directly.
+Run `python scripts/install_agents.py` once to register or update detected
+clients to the recommended simple profile.
 
 ## CTF workflow and memory
 
@@ -282,18 +292,16 @@ per-tool schemas and descriptions.
 
 - 210 tools exposed through a successful MCP JSON-RPC handshake.
 - 117/117 configured smoke scenarios pass, including expected negative probes.
-- 8/8 unit and security regression tests pass.
-- Local quality benchmark: **10.0/10** — 9/9 category probes, 4/4 autonomous
-  flag-recovery cases, and zero known CSS/code false flags.
+- 18/18 unit, REST, and security regression tests pass.
+- Local quality benchmark: **10.0/10** — core evaluation plus a 7/7 advanced
+  release gate covering real RSA decryption, nonce reuse, pwn payload ordering,
+  repeating-key XOR, layered URL decoding, and archive metadata.
 - REST `/health` reports registry, memory, and test-data readiness checks.
 
 Run the complete local verification:
 
 ```bash
-python -m pytest -q
-python tests/test_smoke.py
-python tests/test_mcp.py
-python scripts/eval_core.py
+python scripts/verify.py
 ```
 
 ## Design references

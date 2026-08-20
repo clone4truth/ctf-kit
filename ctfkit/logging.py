@@ -6,19 +6,15 @@
 """
 
 import logging
+import sys
 import threading
 import time
 from collections import deque
+from loguru import logger as _loguru
 
 _LOG = logging.getLogger("ctfkit")
 _CONFIGURED = False
-
-_LEVEL_STYLE = {
-    "DEBUG": "\x1b[36m", "INFO": "\x1b[32m", "WARNING": "\x1b[33m",
-    "ERROR": "\x1b[31m", "CRITICAL": "\x1b[41;37m",
-}
-_RESET = "\x1b[0m"
-
+_bus: "LogBus"
 
 class LogBus(logging.Handler):
     """Handler that stores records in a thread-safe deque for UI polling."""
@@ -43,15 +39,6 @@ class LogBus(logging.Handler):
         """Take all new records since the last poll."""
         self._evt.clear()
         return list(self.records)
-
-
-class _ColorConsole(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        if getattr(record, "progress", False):
-            return record.getMessage()
-        base = super().format(record)
-        color = _LEVEL_STYLE.get(record.levelname, "")
-        return f"{color}{base}{_RESET}"
 
 
 class _ProgressArea:
@@ -118,7 +105,7 @@ class _Console(logging.StreamHandler):
         try:
             self.acquire()  # parallel tool threads share this stream
             try:
-                msg = self.format(record)
+                msg = record.getMessage()
                 stream = self.stream
                 done_key = getattr(record, "progress_done", None)
                 if done_key:
@@ -127,9 +114,9 @@ class _Console(logging.StreamHandler):
                     key = getattr(record, "progress_key", "") or "tool"
                     self._area.update(stream, key, msg)
                 else:
-                    if not self._area.active():
+                    if not self._area.active() and getattr(stream, "isatty", lambda: False)():
                         stream.write("\r\x1b[2K")
-                    stream.write(msg + "\n")
+                    _loguru.opt(exception=record.exc_info, depth=1).log(record.levelname, msg)
                 stream.flush()
             finally:
                 self.release()
@@ -139,13 +126,22 @@ class _Console(logging.StreamHandler):
 
 def setup_logging(level: int = logging.INFO) -> tuple[logging.Logger, LogBus]:
     """Initialize the global logger once. Returns (logger, bus)."""
-    global _CONFIGURED
+    global _CONFIGURED, _bus
     if _CONFIGURED:
         return _LOG, _bus
+    _loguru.remove()
+    _loguru.add(
+        sys.stderr,
+        level=logging.getLevelName(level),
+        format=("<dim>{time:HH:mm:ss}</dim>  "
+                "<level>{level: <7}</level> <dim>│</dim> <level>{message}</level>"),
+        colorize=sys.stderr.isatty(),
+        enqueue=True,
+        backtrace=True,
+        diagnose=False,
+    )
     _bus = LogBus()
-    fmt = "%(asctime)s %(levelname)-8s %(name)s | %(message)s"
-    console = _Console()
-    console.setFormatter(_ColorConsole(fmt))
+    console = _Console(sys.stderr)
     _bus.setFormatter(logging.Formatter("%(message)s"))
     _LOG.setLevel(level)
     _LOG.addHandler(console)

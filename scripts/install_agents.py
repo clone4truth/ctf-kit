@@ -40,15 +40,16 @@ MCP_PY = str(REPO / "mcp_server.py")
 # (label, config path, key, server entry)
 TARGETS = [
     ("opencode", OPENCODE_DIR / "opencode.json", "mcp",
-     {"type": "local", "command": [PY, MCP_PY], "enabled": True, "environment": {}}),
+     {"type": "local", "command": [PY, MCP_PY], "enabled": True,
+      "environment": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("claude code", Path.home() / ".claude.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {}}),
+     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("cursor", Path.home() / ".cursor" / "mcp.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {}}),
+     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("gemini cli", Path.home() / ".gemini" / "settings.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {}}),
+     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("windsurf", Path.home() / ".codeium" / "windsurf" / "mcp_config.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {}}),
+     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
 ]
 
 SERVER_NAME = "ctf-tools"
@@ -61,7 +62,15 @@ def _merge_mcp(path: Path, key: str, entry: dict) -> str:
     cfg = json.loads(path.read_text(encoding="utf-8"))
     servers = cfg.setdefault(key, {})
     if SERVER_NAME in servers:
-        return "already configured"
+        current = servers[SERVER_NAME]
+        env_key = "environment" if "environment" in entry else "env"
+        desired_env = entry.get(env_key, {})
+        current_env = current.setdefault(env_key, {})
+        if all(current_env.get(name) == value for name, value in desired_env.items()):
+            return "already configured"
+        current_env.update(desired_env)
+        path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+        return "updated to simple profile"
     servers[SERVER_NAME] = entry
     path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return "registered"

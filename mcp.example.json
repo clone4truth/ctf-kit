@@ -6,9 +6,10 @@
         "path\\to\\ctf-tools\\mcp_server.py"
       ],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "CTFKIT_MCP_PROFILE": "simple"
       },
-      "description": "CTF Kit — AI-powered CTF & security toolkit (103 tools: crypto, stego, forensics, web, rev, pwn, osint)",
+      "description": "CTF Kit — simple MCP profile with access to all registered tools",
       "timeout": 300,
       "disabled": false
     }

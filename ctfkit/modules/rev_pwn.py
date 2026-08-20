@@ -812,21 +812,32 @@ def binary_xor_search(path: str, target_prefix: str = "flag{", max_key_len: int 
     prefix_b = target_prefix.encode("utf-8")
 
     matches = []
-    # 1. 1-byte XOR
-    for k in range(1, 256):
-        xored_prefix = bytes(b ^ k for b in prefix_b)
-        pos = 0
-        while True:
-            idx = data.find(xored_prefix, pos)
-            if idx == -1:
+    max_key_len = max(1, min(int(max_key_len), len(prefix_b)))
+    # Try every alignment. A prefix at least as long as the key determines all
+    # key bytes, after which the candidate plaintext can be verified directly.
+    for key_len in range(1, max_key_len + 1):
+        for idx in range(0, max(0, len(data) - len(prefix_b) + 1)):
+            key = [None] * key_len
+            valid = True
+            for pos, plain_byte in enumerate(prefix_b):
+                slot = (idx + pos) % key_len
+                candidate = data[idx + pos] ^ plain_byte
+                if key[slot] is not None and key[slot] != candidate:
+                    valid = False
+                    break
+                key[slot] = candidate
+            if not valid or any(byte is None for byte in key):
+                continue
+            chunk = bytes(data[pos] ^ key[pos % key_len] for pos in range(idx, min(len(data), idx + 100)))
+            if not chunk.startswith(prefix_b):
+                continue
+            clean_str = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in chunk)
+            key_hex = bytes(key).hex()
+            matches.append(f"  [{key_len}-byte key 0x{key_hex}] Offset 0x{idx:08x}: {clean_str}")
+            if len(matches) >= 16:
                 break
-            # Extract decrypted chunk
-            chunk = bytes(b ^ k for b in data[idx:idx+100])
-            clean_str = "".join(chr(b) if 32 <= b <= 126 else "." for b in chunk)
-            matches.append(f"  [1-byte key 0x{k:02x}] Offset 0x{idx:08x}: {clean_str}")
-            pos = idx + 1
-            if len(matches) > 15:
-                break
+        if len(matches) >= 16:
+            break
 
     if not matches:
         return f"No occurrences of XOR-encoded '{target_prefix}' found in file."

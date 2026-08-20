@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "gate": "advanced-release",
+  "passed": true,
+  "score_cap_10": 10.0,
+  "summary": {
+    "passed": 7,
+    "total": 7
+  },
+  "categories": [
+    "crypto",
+    "forensics",
+    "pwn",
+    "rev",
+    "web"
+  ],
+  "elapsed_seconds": 0.136,
+  "cases": [
+    {
+      "id": "crypto-rsa-fermat-decrypt",
+      "category": "crypto",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{fermat_real_decrypt}"
+      ]
+    },
+    {
+      "id": "crypto-gcm-known-plaintext",
+      "category": "crypto",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{gcm_nonce_reuse_ok}"
+      ]
+    },
+    {
+      "id": "pwn-ret2libc-chain",
+      "category": "pwn",
+      "passed": true,
+      "status": "success",
+      "flags": []
+    },
+    {
+      "id": "pwn-format-write",
+      "category": "pwn",
+      "passed": true,
+      "status": "success",
+      "flags": []
+    },
+    {
+      "id": "rev-repeating-xor",
+      "category": "rev",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{xor_binary_recovered}"
+      ]
+    },
+    {
+      "id": "web-layered-url",
+      "category": "web",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{url_layers_removed}"
+      ]
+    },
+    {
+      "id": "forensics-tar-header",
+      "category": "forensics",
+      "passed": true,
+      "status": "success",
+      "flags": [
+        "flag{tar_header_found}"
+      ]
+    }
+  ]
+}
