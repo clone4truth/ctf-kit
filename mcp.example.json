@@ -3,7 +3,9 @@
     "ctf-tools": {
       "command": "path\\to\\ctf-tools\\.venv\\Scripts\\python.exe",
       "args": [
-        "path\\to\\ctf-tools\\mcp_server.py"
+        "path\\to\\ctf-tools\\mcp_server.py",
+        "--server",
+        "http://127.0.0.1:8765"
       ],
       "env": {
         "PYTHONUNBUFFERED": "1",

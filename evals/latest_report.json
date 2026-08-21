@@ -25,7 +25,7 @@
     "rate": 1.0
   },
   "flag_false_positives": 0,
-  "elapsed_seconds": 0.488,
+  "elapsed_seconds": 0.525,
   "cases": [
     {
       "id": "encoding-base64-001",
