@@ -20,6 +20,7 @@ Usage: python scripts/install_agents.py
 """
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -36,20 +37,22 @@ SKILL_DST_DIRS = [Path.home() / ".agents" / "skills", Path.home() / ".claude" / 
 _VENV_PY = REPO / (".venv/Scripts/python.exe" if sys.platform == "win32" else ".venv/bin/python")
 PY = str(_VENV_PY if _VENV_PY.exists() else sys.executable)
 MCP_PY = str(REPO / "mcp_server.py")
+SERVER_URL = os.environ.get("CTFKIT_SERVER_URL", "http://127.0.0.1:8765")
+MCP_ARGS = [MCP_PY, "--server", SERVER_URL]
 
 # (label, config path, key, server entry)
 TARGETS = [
     ("opencode", OPENCODE_DIR / "opencode.json", "mcp",
-     {"type": "local", "command": [PY, MCP_PY], "enabled": True,
+     {"type": "local", "command": [PY, *MCP_ARGS], "enabled": True,
       "environment": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("claude code", Path.home() / ".claude.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
+     {"command": PY, "args": MCP_ARGS, "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("cursor", Path.home() / ".cursor" / "mcp.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
+     {"command": PY, "args": MCP_ARGS, "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("gemini cli", Path.home() / ".gemini" / "settings.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
+     {"command": PY, "args": MCP_ARGS, "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
     ("windsurf", Path.home() / ".codeium" / "windsurf" / "mcp_config.json", "mcpServers",
-     {"command": PY, "args": [MCP_PY], "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
+     {"command": PY, "args": MCP_ARGS, "env": {"CTFKIT_MCP_PROFILE": "simple", "PYTHONUNBUFFERED": "1"}}),
 ]
 
 SERVER_NAME = "ctf-tools"
@@ -63,14 +66,21 @@ def _merge_mcp(path: Path, key: str, entry: dict) -> str:
     servers = cfg.setdefault(key, {})
     if SERVER_NAME in servers:
         current = servers[SERVER_NAME]
+        changed = False
+        for name in ("type", "command", "args", "enabled"):
+            if name in entry and current.get(name) != entry[name]:
+                current[name] = entry[name]
+                changed = True
         env_key = "environment" if "environment" in entry else "env"
         desired_env = entry.get(env_key, {})
         current_env = current.setdefault(env_key, {})
-        if all(current_env.get(name) == value for name, value in desired_env.items()):
+        if not all(current_env.get(name) == value for name, value in desired_env.items()):
+            current_env.update(desired_env)
+            changed = True
+        if not changed:
             return "already configured"
-        current_env.update(desired_env)
         path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-        return "updated to simple profile"
+        return "updated to central-backend profile"
     servers[SERVER_NAME] = entry
     path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return "registered"

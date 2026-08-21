@@ -31,18 +31,25 @@ Built for AI agents and direct automation through MCP and a headless REST API.
 
 ## Architecture
 
-MCP, REST, pipelines, and the autonomous solver use the same canonical
-executor in `ctfkit/registry.py`. This avoids duplicated execution, inconsistent
-timeouts, and false-success telemetry.
+The recommended deployment follows a lightweight MCP-client/central-backend
+model. MCP forwards calls over HTTP to `server.py`; REST, pipelines, and the
+autonomous solver then converge on the canonical executor in
+`ctfkit/registry.py`. This centralizes logs, telemetry, caching, policy, and
+tool execution while keeping the AI-facing MCP process small.
 
 ```mermaid
 flowchart LR
-    C["MCP / REST / Agent"] --> E["Canonical Executor"]
+    A["AI Client"] --> M["Lightweight MCP Bridge"]
+    M -->|HTTP| B["Central REST Backend"]
+    X["REST / Agent / Pipeline"] --> B
+    B --> J["Bounded Background Job Manager"]
+    J --> W["Killable Worker Process Groups"]
+    B --> E["Canonical Executor"]
     E --> P["Argument + Safety Policy"]
     P --> T["210 CTF Tools"]
     T --> R["Structured Result"]
-    R --> F["Ranked Flag Candidates"]
-    R --> M["Verified Memory / Writeup"]
+    R --> F["Flags + Evidence"]
+    B --> O["Central Logs + Telemetry"]
 ```
 
 Every execution reports one explicit status: `success`, `no_finding`,
@@ -144,11 +151,32 @@ Risky tools automatically run in killable worker processes. Their arguments
 travel over stdin rather than the process command line. No environment
 configuration is needed for normal lab or tournament use.
 
+Long-running work can use the persistent background-job API:
+
+```text
+POST /api/jobs                     submit a typed registry tool
+GET  /api/jobs/{id}                lifecycle state + final result
+GET  /api/jobs/{id}/output         incremental logs with a byte cursor
+GET  /api/jobs/{id}/stream         live Server-Sent Events
+POST /api/jobs/{id}/cancel         terminate the complete process group
+```
+
+Jobs are bounded by `CTFKIT_JOB_WORKERS` (default `4`) and persisted under
+`memory/jobs/`. An in-progress job becomes `interrupted` after a backend restart;
+sensitive-looking arguments are redacted in persisted metadata.
+
 ### MCP server
 
 ```bash
-python mcp_server.py
+# Recommended: start the central backend first
+python server.py
+
+# MCP bridge used by the AI client
+python mcp_server.py --server http://127.0.0.1:8765
 ```
+
+Omit `--server` only when you intentionally want the legacy single-process
+local mode. Remote backends support `--token`, `--timeout`, and `--retries`.
 
 ## MCP client setup
 
@@ -176,7 +204,11 @@ path on Windows):
   "mcpServers": {
     "ctf-tools": {
       "command": "/absolute/path/to/ctf-kit/.venv/bin/python",
-      "args": ["/absolute/path/to/ctf-kit/mcp_server.py"],
+      "args": [
+        "/absolute/path/to/ctf-kit/mcp_server.py",
+        "--server",
+        "http://127.0.0.1:8765"
+      ],
       "env": {
         "PYTHONUNBUFFERED": "1",
         "CTFKIT_MCP_PROFILE": "simple"
@@ -188,18 +220,31 @@ path on Windows):
 
 ### Simple MCP usage
 
-The recommended `simple` profile exposes a compact workflow surface plus two
-gateway tools while retaining access to the complete registry:
+The recommended `simple` profile exposes a compact workflow surface plus
+discovery, execution, telemetry, and background-job gateways while retaining
+access to the complete registry:
 
 1. Call `detect_challenge` or `plan_challenge` with the challenge statement.
 2. Call `find_ctf_tools` when you need a specific technique or parameter schema.
 3. Call `run_ctf_tool` with the selected name and arguments.
-4. Call `extract_flags_tool`, then `remember_challenge` after verification.
+4. For long work, call `submit_background_job`, then poll
+   `get_background_job`; use `cancel_background_job` when needed.
+5. Call `extract_flags_tool`, then `remember_challenge` after verification.
 
 This avoids sending 210 schemas to the AI client on every tool-list refresh.
 Power users can set `CTFKIT_MCP_PROFILE=full` to expose every tool directly.
 Run `python scripts/install_agents.py` once to register or update detected
 clients to the recommended simple profile.
+
+All MCP executions in central-backend mode appear in the `server.py` terminal
+with `source=mcp` and a correlation ID. Inspect aggregate metrics at
+`GET /api/telemetry`, active work at `GET /api/executions`, and an individual
+run at `GET /api/executions/{execution_id}`.
+
+The server terminal records every invocation's tool, category, source, status,
+duration, and correlation/job ID. Background worker diagnostics are prefixed
+with `[job:<id>]`. Full tool results remain in the structured API/MCP response
+instead of being dumped to the terminal, which reduces accidental secret leaks.
 
 ## CTF workflow and memory
 
@@ -290,9 +335,10 @@ per-tool schemas and descriptions.
 
 ## Validation status
 
-- 210 tools exposed through a successful MCP JSON-RPC handshake.
+- 210 registry tools plus 6 backend transport/job tools exposed through a
+  successful full-profile MCP JSON-RPC handshake (216 schemas total).
 - 117/117 configured smoke scenarios pass, including expected negative probes.
-- 18/18 unit, REST, and security regression tests pass.
+- 33/33 unit, REST, remote-backend, installer, job-lifecycle, and security regression tests pass.
 - Local quality benchmark: **10.0/10** — core evaluation plus a 7/7 advanced
   release gate covering real RSA decryption, nonce reuse, pwn payload ordering,
   repeating-key XOR, layered URL decoding, and archive metadata.

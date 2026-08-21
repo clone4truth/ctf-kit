@@ -5,9 +5,10 @@ accepted only when the relevant layers remain green:
 
 | Layer | Command | What it proves |
 |---|---|---|
-| Unit/architecture | `pytest -q` | contracts, safety, flags, timeouts, writeups |
+| Unit/architecture | `pytest -q` | contracts, safety, flags, job lifecycle/process cancellation, timeouts, writeups |
 | Smoke | `python tests/test_smoke.py` | broad invocation and graceful degradation |
 | MCP | `python tests/test_mcp.py` | protocol handshake, schemas, registry parity |
+| Remote MCP | `pytest -q tests/test_remote_backend.py` | stdio MCP → HTTP backend → sync/job executor → centralized telemetry |
 | Agent E2E | `CTF_E2E=1 python tests/test_agent_categories.py` | planning and local solves |
 | Evaluation | `python scripts/eval_core.py` | deterministic recovery and false positives |
 | Advanced gate | `python scripts/eval_advanced.py` | real decryption, nonce reuse, exploit-chain ordering, multi-byte XOR, layered web, archive metadata |

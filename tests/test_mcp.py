@@ -69,8 +69,12 @@ async def main():
         print(f"call {REQS[tid-1]['params']['name']}: {res['content'][0]['text'][:60]!r}")
     import ctfkit.modules  # noqa: F401
     from ctfkit.registry import TOOLS
-    assert len(tools) == len(TOOLS), f"MCP={len(tools)} berbeda dari registry={len(TOOLS)}"
-    print(f"MCP HANDSHAKE OK — All {len(tools)} tools exposed properly")
+    transport_tools = {
+        "backend_health", "backend_telemetry", "submit_background_job",
+        "get_background_job", "list_background_jobs", "cancel_background_job",
+    }
+    assert set(names) == set(TOOLS) | transport_tools
+    print(f"MCP HANDSHAKE OK — {len(TOOLS)} registry tools + {len(transport_tools)} transport tools")
 
 
 if __name__ == "__main__":

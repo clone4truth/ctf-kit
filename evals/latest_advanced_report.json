@@ -14,7 +14,7 @@
     "rev",
     "web"
   ],
-  "elapsed_seconds": 0.136,
+  "elapsed_seconds": 0.131,
   "cases": [
     {
       "id": "crypto-rsa-fermat-decrypt",
